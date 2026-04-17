@@ -28,7 +28,7 @@ void main() {
       LaundromatPosApp(
         repository: repository,
         sessionStore: SessionStore(),
-        currentUser: null,
+        currentSession: null,
       ),
     );
 

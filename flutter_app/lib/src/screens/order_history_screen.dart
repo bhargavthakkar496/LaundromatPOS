@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/order_history_item.dart';
 import '../models/order.dart';
 import '../services/open_external_url.dart';
@@ -15,7 +15,7 @@ class OrderHistoryScreen extends StatelessWidget {
     required this.onLogout,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final Future<void> Function() onLogout;
 
   Future<void> _sendRefundNotification(

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
@@ -21,7 +21,7 @@ class OrderManagementScreen extends StatefulWidget {
     required this.user,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final PosUser user;
 
   @override
@@ -49,15 +49,38 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   String _selectedHistoryStatus = _historyStatusOptions.first;
   int _loadSizeKg = _loadSizes[0];
   DateTime _selectedHistoryDate = DateTime.now();
+  final Set<String> _selectedServices = {
+    LaundryService.washing,
+    LaundryService.drying,
+  };
   Machine? _selectedWasher;
   Machine? _selectedDryer;
+  Machine? _selectedIroningStation;
   bool _saving = false;
   bool _confirming = false;
   Future<List<OrderHistoryItem>>? _historyFuture;
   List<Machine> _washers = const [];
   List<Machine> _dryers = const [];
+  List<Machine> _ironingStations = const [];
   ActiveOrderSession? _activeSession;
   Timer? _sessionTimer;
+
+  bool get _includesWashing =>
+      _selectedServices.contains(LaundryService.washing);
+
+  bool get _includesDrying =>
+      _selectedServices.contains(LaundryService.drying);
+
+  bool get _includesIroning =>
+      _selectedServices.contains(LaundryService.ironing);
+
+  double get _estimatedAmount {
+    return [
+      _includesWashing ? _selectedWasher?.price : null,
+      _includesDrying ? _selectedDryer?.price : null,
+      _includesIroning ? _selectedIroningStation?.price : null,
+    ].whereType<double>().fold<double>(0, (sum, value) => sum + value);
+  }
 
   @override
   void initState() {
@@ -89,8 +112,13 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     setState(() {
       _washers = machines.where((machine) => machine.type == 'Washer').toList();
       _dryers = machines.where((machine) => machine.type == 'Dryer').toList();
+      _ironingStations = machines
+          .where((machine) => machine.type == Machine.ironingStationType)
+          .toList();
       _selectedWasher ??= _washers.isEmpty ? null : _washers.first;
       _selectedDryer ??= _dryers.isEmpty ? null : _dryers.first;
+      _selectedIroningStation ??=
+          _ironingStations.isEmpty ? null : _ironingStations.first;
     });
   }
 
@@ -130,7 +158,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
   Future<void> _submitOrderDraft() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid || _selectedWasher == null || _selectedDryer == null) {
+    final requiresWashing = _includesWashing;
+    final requiresDrying = _includesDrying;
+    final requiresIroning = _includesIroning;
+
+    if (!isValid || _selectedServices.isEmpty) {
+      return;
+    }
+    if (requiresWashing && _selectedWasher == null) {
+      _showFormMessage('Select a washer for the washing service.');
+      return;
+    }
+    if (requiresDrying && _selectedDryer == null) {
+      _showFormMessage('Select a dryer for the drying service.');
+      return;
+    }
+    if (requiresIroning && _selectedIroningStation == null) {
+      _showFormMessage('Select an ironing station for the ironing service.');
       return;
     }
 
@@ -142,9 +186,11 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       customerName: _customerNameController.text.trim(),
       customerPhone: _customerPhoneController.text.trim(),
       loadSizeKg: _loadSizeKg,
-      washOption: _washOption,
-      washer: _selectedWasher!,
-      dryer: _selectedDryer!,
+      selectedServices: _selectedServices.toList(),
+      washOption: requiresWashing ? _washOption : null,
+      washer: requiresWashing ? _selectedWasher : null,
+      dryer: requiresDrying ? _selectedDryer : null,
+      ironingStation: requiresIroning ? _selectedIroningStation : null,
       paymentMethod: _paymentMethod,
     );
 
@@ -157,11 +203,328 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       _activeSession = session;
     });
 
+    _showFormMessage(
+      'Order details are now visible on both operator and customer screens.',
+    );
+  }
+
+  void _showFormMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Order details are now visible on both operator and customer screens.',
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _toggleService(String service, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedServices.add(service);
+      } else {
+        _selectedServices.remove(service);
+      }
+    });
+  }
+
+  IconData _serviceIcon(String service) {
+    switch (service) {
+      case LaundryService.washing:
+        return Icons.local_laundry_service_outlined;
+      case LaundryService.drying:
+        return Icons.dry_outlined;
+      default:
+        return Icons.iron_outlined;
+    }
+  }
+
+  String _serviceDescription(String service) {
+    switch (service) {
+      case LaundryService.washing:
+        return 'Select the washer and wash program for this order.';
+      case LaundryService.drying:
+        return 'Add drying when the customer needs a full wash-to-dry cycle.';
+      default:
+        return 'Add ironing when the customer needs finishing after laundry.';
+    }
+  }
+
+  Color _serviceColor(String service) {
+    switch (service) {
+      case LaundryService.washing:
+        return const Color(0xFF0E7490);
+      case LaundryService.drying:
+        return const Color(0xFFC86B3C);
+      default:
+        return const Color(0xFF8F5DB7);
+    }
+  }
+
+  String _serviceMachineLabel(String label, Machine? machine) {
+    if (machine == null) {
+      return '$label not assigned';
+    }
+    return '$label: ${machine.name}';
+  }
+
+  Widget _buildServiceSelector() {
+    final services = [
+      LaundryService.washing,
+      LaundryService.drying,
+      LaundryService.ironing,
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 12.0;
+        final compact = constraints.maxWidth < 920;
+        final columns = compact ? 1 : 3;
+        final width =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: services.map((service) {
+            final selected = _selectedServices.contains(service);
+            final color = _serviceColor(service);
+            return SizedBox(
+              width: width,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: _saving ? null : () => _toggleService(service, !selected),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? color.withValues(alpha: 0.1)
+                        : Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected
+                          ? color
+                          : Theme.of(context).colorScheme.outlineVariant,
+                      width: selected ? 1.6 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(_serviceIcon(service), color: color),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              service,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          Checkbox(
+                            value: selected,
+                            onChanged: _saving
+                                ? null
+                                : (value) => _toggleService(
+                                      service,
+                                      value ?? false,
+                                    ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _serviceDescription(service),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildServiceConfigurationCard({
+    required String title,
+    required String service,
+    required List<Widget> children,
+  }) {
+    final color = _serviceColor(service);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(_serviceIcon(service), color: color),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraftSummaryCard() {
+    final selectedServices = _selectedServices.toList();
+    final estimatedAmount = _estimatedAmount;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F5F73), Color(0xFF18829A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Order Preview',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The order will be built from the selected services and machine assignments below.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: selectedServices.isEmpty
+                ? [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Text(
+                        'Select at least one service',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ]
+                : selectedServices
+                    .map(
+                      (service) => Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _serviceIcon(service),
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              service,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Load size: $_loadSizeKg kg',
+            style: const TextStyle(color: Colors.white),
+          ),
+          if (_includesWashing)
+            Text(
+              _serviceMachineLabel('Washer', _selectedWasher),
+              style: const TextStyle(color: Colors.white),
+            ),
+          if (_includesDrying)
+            Text(
+              _serviceMachineLabel('Dryer', _selectedDryer),
+              style: const TextStyle(color: Colors.white),
+            ),
+          if (_includesIroning)
+            Text(
+              _serviceMachineLabel('Ironing station', _selectedIroningStation),
+              style: const TextStyle(color: Colors.white),
+            ),
+          if (_includesWashing)
+            Text(
+              'Wash option: $_washOption',
+              style: const TextStyle(color: Colors.white),
+            ),
+          Text(
+            'Payment method: $_paymentMethod',
+            style: const TextStyle(color: Colors.white),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Estimated order total',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.84),
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            estimatedAmount > 0
+                ? 'INR ${estimatedAmount.toStringAsFixed(0)}'
+                : 'Select services to calculate total',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -265,6 +628,19 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     return null;
   }
 
+  Machine? _findMachineById(int? id) {
+    if (id == null) {
+      return null;
+    }
+    final combined = [..._washers, ..._dryers, ..._ironingStations];
+    for (final machine in combined) {
+      if (machine.id == id) {
+        return machine;
+      }
+    }
+    return null;
+  }
+
   Future<ReceiptData?> _loadReceiptData(ActiveOrderSession session) async {
     final orderId = session.orderId;
     if (orderId == null) {
@@ -340,13 +716,48 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Enter the order details here. The customer and operator will both see the same order for confirmation before booking.',
+                    'Choose the laundry services this customer needs, assign the machines or station for each selected service, and then push the draft order to both screens for confirmation.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
                   CustomerDetailsForm(
                     nameController: _customerNameController,
                     phoneController: _customerPhoneController,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Services',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Washing, drying, and ironing are independent services. The order will be built from whichever services you select here.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildServiceSelector(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Order Details',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -372,75 +783,127 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           },
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: _washOption,
-                    decoration: const InputDecoration(labelText: 'Wash option'),
-                    items: _washOptions
-                        .map(
-                          (option) => DropdownMenuItem<String>(
-                            value: option,
-                            child: Text(option),
+                  if (_includesWashing) ...[
+                    _buildServiceConfigurationCard(
+                      title: 'Washing Service',
+                      service: LaundryService.washing,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          initialValue: _washOption,
+                          decoration: const InputDecoration(
+                            labelText: 'Wash option',
                           ),
-                        )
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            setState(() {
-                              _washOption = value;
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<Machine>(
-                    initialValue: _selectedWasher,
-                    decoration:
-                        const InputDecoration(labelText: 'Washer assigned'),
-                    items: _washers
-                        .map(
-                          (machine) => DropdownMenuItem<Machine>(
-                            value: machine,
-                            child: Text(
-                              '${machine.name} • ${machine.capacityKg}kg',
-                            ),
+                          items: _washOptions
+                              .map(
+                                (option) => DropdownMenuItem<String>(
+                                  value: option,
+                                  child: Text(option),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _washOption = value;
+                                  });
+                                },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<Machine>(
+                          initialValue: _selectedWasher,
+                          decoration: const InputDecoration(
+                            labelText: 'Assign washer',
                           ),
-                        )
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _selectedWasher = value;
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<Machine>(
-                    initialValue: _selectedDryer,
-                    decoration:
-                        const InputDecoration(labelText: 'Dryer assigned'),
-                    items: _dryers
-                        .map(
-                          (machine) => DropdownMenuItem<Machine>(
-                            value: machine,
-                            child: Text(
-                              '${machine.name} • ${machine.capacityKg}kg',
-                            ),
+                          items: _washers
+                              .map(
+                                (machine) => DropdownMenuItem<Machine>(
+                                  value: machine,
+                                  child: Text(
+                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _selectedWasher = value;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_includesDrying) ...[
+                    _buildServiceConfigurationCard(
+                      title: 'Drying Service',
+                      service: LaundryService.drying,
+                      children: [
+                        DropdownButtonFormField<Machine>(
+                          initialValue: _selectedDryer,
+                          decoration: const InputDecoration(
+                            labelText: 'Assign dryer',
                           ),
-                        )
-                        .toList(),
-                    onChanged: _saving
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _selectedDryer = value;
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 16),
+                          items: _dryers
+                              .map(
+                                (machine) => DropdownMenuItem<Machine>(
+                                  value: machine,
+                                  child: Text(
+                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _selectedDryer = value;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_includesIroning) ...[
+                    _buildServiceConfigurationCard(
+                      title: 'Ironing Service',
+                      service: LaundryService.ironing,
+                      children: [
+                        DropdownButtonFormField<Machine>(
+                          initialValue: _selectedIroningStation,
+                          decoration: const InputDecoration(
+                            labelText: 'Assign ironing station',
+                          ),
+                          items: _ironingStations
+                              .map(
+                                (machine) => DropdownMenuItem<Machine>(
+                                  value: machine,
+                                  child: Text(
+                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _selectedIroningStation = value;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   DropdownButtonFormField<String>(
                     initialValue: _paymentMethod,
                     decoration: const InputDecoration(
@@ -465,6 +928,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                             });
                           },
                   ),
+                  const SizedBox(height: 20),
+                  _buildDraftSummaryCard(),
                   const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: _saving ? null : _submitOrderDraft,
@@ -472,7 +937,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     label: Text(
                       _saving
                           ? 'Sending to customer...'
-                          : 'Show On Both Screens',
+                          : 'Build Order And Show On Both Screens',
                     ),
                   ),
                 ],
@@ -485,8 +950,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   }
 
   Widget _buildActiveSessionCard(ActiveOrderSession session) {
-    final washer = _findMachine(session.washerMachineId, _washers);
-    final dryer = _findMachine(session.dryerMachineId, _dryers);
+    final washer = _findMachineById(session.washerMachineId);
+    final dryer = _findMachineById(session.dryerMachineId);
+    final ironing = _findMachineById(session.ironingMachineId);
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Padding(
@@ -526,11 +992,21 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             Text('Customer: ${session.customerName}'),
             Text('Phone: ${session.customerPhone}'),
             Text('Load size: ${session.loadSizeKg}kg'),
-            Text('Wash option: ${session.washOption}'),
-            Text(
-                'Washer assigned: ${washer?.name ?? 'Washer ${session.washerMachineId}'}'),
-            Text(
-                'Dryer assigned: ${dryer?.name ?? 'Dryer ${session.dryerMachineId}'}'),
+            Text('Services: ${session.selectedServices.join(', ')}'),
+            if (session.washOption != null)
+              Text('Wash option: ${session.washOption}'),
+            if (session.includesWashing)
+              Text(
+                'Washer assigned: ${washer?.name ?? 'Washer ${session.washerMachineId}'}',
+              ),
+            if (session.includesDrying)
+              Text(
+                'Dryer assigned: ${dryer?.name ?? 'Dryer ${session.dryerMachineId}'}',
+              ),
+            if (session.includesIroning)
+              Text(
+                'Ironing assigned: ${ironing?.name ?? 'Station ${session.ironingMachineId}'}',
+              ),
             Text('Payment method: ${session.paymentMethod}'),
             if (session.confirmedBy != null)
               Text('Confirmed by: ${session.confirmedBy}'),
@@ -732,14 +1208,28 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                   'Load size: ${item.order.loadSizeKg ?? item.machine.capacityKg}kg',
                                 ),
                                 Text(
-                                  'Wash option: ${item.order.washOption ?? 'Standard Wash'}',
+                                  'Services: ${item.order.selectedServices.join(', ')}',
                                 ),
-                                Text(
-                                  'Washer assigned: ${item.machine.name}',
-                                ),
-                                Text(
-                                  'Dryer assigned: ${item.dryerMachine?.name ?? 'Not assigned'}',
-                                ),
+                                if (item.order.washOption != null)
+                                  Text(
+                                    'Wash option: ${item.order.washOption}',
+                                  ),
+                                if (item.order.selectedServices.contains(
+                                  LaundryService.washing,
+                                ))
+                                  Text('Washer assigned: ${item.machine.name}'),
+                                if (item.order.selectedServices.contains(
+                                  LaundryService.drying,
+                                ))
+                                  Text(
+                                    'Dryer assigned: ${item.dryerMachine?.name ?? 'Not assigned'}',
+                                  ),
+                                if (item.order.selectedServices.contains(
+                                  LaundryService.ironing,
+                                ))
+                                  Text(
+                                    'Ironing assigned: ${item.ironingMachine?.name ?? 'Not assigned'}',
+                                  ),
                                 Text(
                                   'Time: ${DateFormat('hh:mm a').format(item.order.timestamp)}',
                                 ),

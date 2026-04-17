@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/payment_session.dart';
@@ -17,7 +17,7 @@ class CustomerSelfServiceScreen extends StatefulWidget {
     this.postPaymentResetDelay = const Duration(seconds: 4),
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final Duration? refreshInterval;
   final Duration postPaymentResetDelay;
 
@@ -79,7 +79,10 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
     _scheduleResetIfNeeded(visibleSession);
   }
 
-  Machine? _machineById(int id) {
+  Machine? _machineById(int? id) {
+    if (id == null) {
+      return null;
+    }
     for (final machine in _machines) {
       if (machine.id == id) {
         return machine;
@@ -113,7 +116,9 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
 
     final washer = _machineById(session.washerMachineId);
     final dryer = _machineById(session.dryerMachineId);
-    final amount = (washer?.price ?? 0) + (dryer?.price ?? 0);
+    final ironingStation = _machineById(session.ironingMachineId);
+    final amount =
+        (washer?.price ?? 0) + (dryer?.price ?? 0) + (ironingStation?.price ?? 0);
 
     setState(() {
       _processingPayment = true;
@@ -246,6 +251,8 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
     final washer =
         session == null ? null : _machineById(session.washerMachineId);
     final dryer = session == null ? null : _machineById(session.dryerMachineId);
+    final ironingStation =
+        session == null ? null : _machineById(session.ironingMachineId);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Customer Screen')),
@@ -343,21 +350,33 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
                             Text('Customer: ${session.customerName}'),
                             Text('Phone: ${session.customerPhone}'),
                             Text('Load size: ${session.loadSizeKg}kg'),
-                            Text('Wash option: ${session.washOption}'),
+                            Text(
+                              'Services: ${session.selectedServices.join(', ')}',
+                            ),
+                            if (session.washOption != null)
+                              Text('Wash option: ${session.washOption}'),
                             Text(
                               'Payment method: ${session.paymentMethod}',
                             ),
                             const SizedBox(height: 16),
-                            if (washer != null)
+                            if (washer != null && session.includesWashing)
                               _MachineAssignmentTile(
                                 title: 'Washer Assigned',
                                 machine: washer,
                               ),
-                            if (dryer != null) ...[
+                            if (dryer != null && session.includesDrying) ...[
                               const SizedBox(height: 12),
                               _MachineAssignmentTile(
                                 title: 'Dryer Assigned',
                                 machine: dryer,
+                              ),
+                            ],
+                            if (ironingStation != null &&
+                                session.includesIroning) ...[
+                              const SizedBox(height: 12),
+                              _MachineAssignmentTile(
+                                title: 'Ironing Station Assigned',
+                                machine: ironingStation,
                               ),
                             ],
                             const SizedBox(height: 20),

@@ -1,0 +1,802 @@
+openapi: 3.1.0
+info:
+  title: Laundromat POS Backend API
+  version: 0.1.0
+  description: >
+    Backend contract matching the current Flutter BackendPosRepository.
+servers:
+  - url: https://api.example.com
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Machines
+  - name: Customers
+  - name: Orders
+  - name: Payments
+  - name: Reservations
+  - name: ActiveOrderSession
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Authenticate an operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, pin]
+              properties:
+                username:
+                  type: string
+                pin:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          description: Invalid credentials
+  /machines:
+    get:
+      tags: [Machines]
+      summary: List machines
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: '#/components/schemas/MachineStatus'
+      responses:
+        '200':
+          description: Machine list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Machine'
+  /machines/{machineId}:
+    get:
+      tags: [Machines]
+      summary: Get a single machine
+      parameters:
+        - $ref: '#/components/parameters/MachineId'
+      responses:
+        '200':
+          description: Machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Machine'
+        '404':
+          description: Machine not found
+  /machines/reservable:
+    get:
+      tags: [Machines]
+      summary: List reservable machines in a time window
+      parameters:
+        - in: query
+          name: machineType
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: startTime
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: endTime
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Reservable machines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Machine'
+  /machines/{machineId}/pickup:
+    post:
+      tags: [Machines]
+      summary: Mark a machine order as picked up and clear assignment
+      parameters:
+        - $ref: '#/components/parameters/MachineId'
+      responses:
+        '200':
+          description: Updated machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Machine'
+  /customers/by-phone:
+    get:
+      tags: [Customers]
+      summary: Find a customer by phone
+      parameters:
+        - in: query
+          name: phone
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          description: Customer not found
+  /customers/walk-in:
+    post:
+      tags: [Customers]
+      summary: Create or update a walk-in customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveWalkInCustomerRequest'
+      responses:
+        '200':
+          description: Customer saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+  /customers/profile:
+    get:
+      tags: [Customers]
+      summary: Get a customer profile with history and aggregates
+      parameters:
+        - in: query
+          name: phone
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+        '404':
+          description: Customer not found
+  /orders/history:
+    get:
+      tags: [Orders]
+      summary: List order history items
+      responses:
+        '200':
+          description: Order history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderHistoryItem'
+  /orders/{orderId}/history-item:
+    get:
+      tags: [Orders]
+      summary: Get one order history item
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order history item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderHistoryItem'
+        '404':
+          description: Order not found
+  /orders/paid:
+    post:
+      tags: [Orders]
+      summary: Create a paid direct-checkout order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaidOrderRequest'
+      responses:
+        '200':
+          description: Paid order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /orders/manual:
+    post:
+      tags: [Orders]
+      summary: Create a manual operator-booked order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateManualOrderRequest'
+      responses:
+        '200':
+          description: Manual order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /orders/{orderId}/refund:
+    post:
+      tags: [Orders]
+      summary: Mark refund processed
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Refunded order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+  /payments/sessions:
+    post:
+      tags: [Payments]
+      summary: Create a payment session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentSessionRequest'
+      responses:
+        '200':
+          description: Payment session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSession'
+  /payments/sessions/{sessionId}:
+    get:
+      tags: [Payments]
+      summary: Poll payment session status
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSession'
+        '404':
+          description: Session not found
+  /reservations:
+    post:
+      tags: [Reservations]
+      summary: Create a machine reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '200':
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineReservation'
+  /active-order-session:
+    get:
+      tags: [ActiveOrderSession]
+      summary: Get the current active shared order session
+      responses:
+        '200':
+          description: Active order session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveOrderSession'
+        '404':
+          description: No active session
+    delete:
+      tags: [ActiveOrderSession]
+      summary: Clear the active shared order session
+      responses:
+        '204':
+          description: Session cleared
+  /active-order-session/draft:
+    post:
+      tags: [ActiveOrderSession]
+      summary: Save a draft shared order session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveActiveOrderDraftRequest'
+      responses:
+        '200':
+          description: Draft session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveOrderSession'
+  /active-order-session/confirm:
+    post:
+      tags: [ActiveOrderSession]
+      summary: Confirm the current active order session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmedBy]
+              properties:
+                confirmedBy:
+                  type: string
+                userId:
+                  type: integer
+      responses:
+        '200':
+          description: Confirmed session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveOrderSession'
+        '404':
+          description: No active session
+  /active-order-session/payment:
+    post:
+      tags: [ActiveOrderSession]
+      summary: Complete payment for the active order session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentReference]
+              properties:
+                paymentReference:
+                  type: string
+      responses:
+        '200':
+          description: Paid session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveOrderSession'
+        '404':
+          description: No payable session
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    MachineId:
+      in: path
+      name: machineId
+      required: true
+      schema:
+        type: integer
+    OrderId:
+      in: path
+      name: orderId
+      required: true
+      schema:
+        type: integer
+  schemas:
+    UserRole:
+      type: string
+      enum: [ADMIN, MANAGER, CASHIER, TECHNICIAN, SUPPORT]
+    MachineStatus:
+      type: string
+      enum: [AVAILABLE, MAINTENANCE, IN_USE, READY_FOR_PICKUP]
+    OrderStatus:
+      type: string
+      enum: [BOOKED, IN_PROGRESS, COMPLETED, CANCELLED]
+    PaymentStatus:
+      type: string
+      enum: [PENDING, PAID, FAILED, REFUNDED]
+    PaymentSessionStatus:
+      type: string
+      enum: [AWAITING_SCAN, PROCESSING, PAID, FAILED]
+    ReservationStatus:
+      type: string
+      enum: [BOOKED, FULFILLED, CANCELLED]
+    ActiveOrderSessionStage:
+      type: string
+      enum: [DRAFT, BOOKED, PAID]
+    PosUser:
+      type: object
+      required: [id, username, displayName, role]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        displayName:
+          type: string
+        pin:
+          type: string
+          description: Usually omitted or blank in backend responses.
+        role:
+          $ref: '#/components/schemas/UserRole'
+    AuthSession:
+      type: object
+      required: [accessToken, user]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        user:
+          $ref: '#/components/schemas/PosUser'
+    Machine:
+      type: object
+      required: [id, name, type, capacityKg, price, status]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        capacityKg:
+          type: integer
+        price:
+          type: number
+        status:
+          $ref: '#/components/schemas/MachineStatus'
+        currentOrderId:
+          type: integer
+          nullable: true
+        cycleStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cycleEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+    Customer:
+      type: object
+      required: [id, fullName, phone]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        phone:
+          type: string
+        preferredWasherSizeKg:
+          type: integer
+          nullable: true
+        preferredDetergentAddOn:
+          type: string
+          nullable: true
+        preferredDryerDurationMinutes:
+          type: integer
+          nullable: true
+    Order:
+      type: object
+      required: [id, machineId, customerId, serviceType, amount, status, paymentMethod, paymentStatus, paymentReference, timestamp]
+      properties:
+        id:
+          type: integer
+        machineId:
+          type: integer
+        customerId:
+          type: integer
+        createdByUserId:
+          type: integer
+          nullable: true
+        serviceType:
+          type: string
+        amount:
+          type: number
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        paymentMethod:
+          type: string
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        paymentReference:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        loadSizeKg:
+          type: integer
+          nullable: true
+        washOption:
+          type: string
+          nullable: true
+        dryerMachineId:
+          type: integer
+          nullable: true
+    OrderHistoryItem:
+      type: object
+      required: [order, machine, customer]
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        machine:
+          $ref: '#/components/schemas/Machine'
+        customer:
+          $ref: '#/components/schemas/Customer'
+        dryerMachine:
+          allOf:
+            - $ref: '#/components/schemas/Machine'
+          nullable: true
+    FavoriteMachineStat:
+      type: object
+      required: [machine, usageCount]
+      properties:
+        machine:
+          $ref: '#/components/schemas/Machine'
+        usageCount:
+          type: integer
+    MachineReservation:
+      type: object
+      required: [id, machineId, customerId, startTime, endTime, status, createdAt]
+      properties:
+        id:
+          type: integer
+        machineId:
+          type: integer
+        customerId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ReservationStatus'
+        createdAt:
+          type: string
+          format: date-time
+        preferredWasherSizeKg:
+          type: integer
+          nullable: true
+        detergentAddOn:
+          type: string
+          nullable: true
+        dryerDurationMinutes:
+          type: integer
+          nullable: true
+    ReservationHistoryItem:
+      type: object
+      required: [reservation, machine, customer]
+      properties:
+        reservation:
+          $ref: '#/components/schemas/MachineReservation'
+        machine:
+          $ref: '#/components/schemas/Machine'
+        customer:
+          $ref: '#/components/schemas/Customer'
+    CustomerProfile:
+      type: object
+      required: [customer, orders, totalSpent, totalVisits, favoriteMachines, upcomingReservations]
+      properties:
+        customer:
+          $ref: '#/components/schemas/Customer'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderHistoryItem'
+        totalSpent:
+          type: number
+        totalVisits:
+          type: integer
+        favoriteMachines:
+          type: array
+          items:
+            $ref: '#/components/schemas/FavoriteMachineStat'
+        upcomingReservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationHistoryItem'
+    PaymentSession:
+      type: object
+      required: [id, amount, paymentMethod, reference, qrPayload, status, attempt, createdAt, checkedAt]
+      properties:
+        id:
+          type: integer
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+        reference:
+          type: string
+        qrPayload:
+          type: string
+        status:
+          $ref: '#/components/schemas/PaymentSessionStatus'
+        attempt:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        checkedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+          nullable: true
+    ActiveOrderSession:
+      type: object
+      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, paymentMethod, stage, createdAt]
+      properties:
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        loadSizeKg:
+          type: integer
+        washOption:
+          type: string
+        washerMachineId:
+          type: integer
+        dryerMachineId:
+          type: integer
+        paymentMethod:
+          type: string
+        stage:
+          $ref: '#/components/schemas/ActiveOrderSessionStage'
+        createdAt:
+          type: string
+          format: date-time
+        confirmedBy:
+          type: string
+          nullable: true
+        orderId:
+          type: integer
+          nullable: true
+        paymentReference:
+          type: string
+          nullable: true
+    SaveWalkInCustomerRequest:
+      type: object
+      required: [fullName, phone]
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        preferredWasherSizeKg:
+          type: integer
+          nullable: true
+        preferredDetergentAddOn:
+          type: string
+          nullable: true
+        preferredDryerDurationMinutes:
+          type: integer
+          nullable: true
+    CreatePaidOrderRequest:
+      type: object
+      required: [machineId, customerId, paymentMethod]
+      properties:
+        machineId:
+          type: integer
+        customerId:
+          type: integer
+        createdByUserId:
+          type: integer
+          nullable: true
+        paymentMethod:
+          type: string
+        referencePrefix:
+          type: string
+        paymentReference:
+          type: string
+          nullable: true
+    CreatePaymentSessionRequest:
+      type: object
+      required: [amount, paymentMethod]
+      properties:
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+        referencePrefix:
+          type: string
+        attempt:
+          type: integer
+        shouldFail:
+          type: boolean
+    CreateManualOrderRequest:
+      type: object
+      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, orderStatus, paymentMethod]
+      properties:
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        loadSizeKg:
+          type: integer
+        washOption:
+          type: string
+        washerMachineId:
+          type: integer
+        dryerMachineId:
+          type: integer
+        orderStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        paymentMethod:
+          type: string
+        createdByUserId:
+          type: integer
+          nullable: true
+    CreateReservationRequest:
+      type: object
+      required: [machineId, customerId, startTime, endTime]
+      properties:
+        machineId:
+          type: integer
+        customerId:
+          type: integer
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        preferredWasherSizeKg:
+          type: integer
+          nullable: true
+        detergentAddOn:
+          type: string
+          nullable: true
+        dryerDurationMinutes:
+          type: integer
+          nullable: true
+    SaveActiveOrderDraftRequest:
+      type: object
+      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, paymentMethod]
+      properties:
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        loadSizeKg:
+          type: integer
+        washOption:
+          type: string
+        washerMachineId:
+          type: integer
+        dryerMachineId:
+          type: integer
+        paymentMethod:
+          type: string

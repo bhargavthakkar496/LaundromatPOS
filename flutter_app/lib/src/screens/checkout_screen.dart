@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
 import '../models/payment_session.dart';
@@ -24,7 +24,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.onLogout,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final PosUser user;
   final Machine machine;
   final Future<void> Function() onLogout;

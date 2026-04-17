@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/payment_session.dart';
 
 class PaymentStatusSheet extends StatefulWidget {
@@ -14,7 +14,7 @@ class PaymentStatusSheet extends StatefulWidget {
     required this.referencePrefix,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final double amount;
   final String paymentMethod;
   final String referencePrefix;

@@ -8,6 +8,10 @@ class MachineStatus {
 }
 
 class Machine {
+  static const washerType = 'Washer';
+  static const dryerType = 'Dryer';
+  static const ironingStationType = 'Ironing Station';
+
   const Machine({
     required this.id,
     required this.name,
@@ -32,9 +36,19 @@ class Machine {
 
   bool get isWasher => type.toLowerCase() == 'washer';
 
-  String get iconAsset => isWasher
-      ? 'assets/icons/washer.svg'
-      : 'assets/icons/dryer.svg';
+  bool get isDryer => type.toLowerCase() == 'dryer';
+
+  bool get isIroningStation => type.toLowerCase() == 'ironing station';
+
+  String? get iconAsset {
+    if (isWasher) {
+      return 'assets/icons/washer.svg';
+    }
+    if (isDryer) {
+      return 'assets/icons/dryer.svg';
+    }
+    return null;
+  }
 
   bool get isAvailable => status == MachineStatus.available;
 
@@ -42,7 +56,15 @@ class Machine {
 
   bool get isReadyForPickup => status == MachineStatus.readyForPickup;
 
-  int get productionCycleMinutes => isWasher ? 35 : 25;
+  int get productionCycleMinutes {
+    if (isWasher) {
+      return 35;
+    }
+    if (isDryer) {
+      return 25;
+    }
+    return 20;
+  }
 
   Duration get cycleDuration => DemoSettings.demoSpeedMode
       ? Duration(seconds: productionCycleMinutes)

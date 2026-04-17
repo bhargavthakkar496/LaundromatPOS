@@ -17,6 +17,7 @@ class Order {
     required this.customerId,
     required this.createdByUserId,
     required this.serviceType,
+    required this.selectedServices,
     required this.amount,
     required this.status,
     required this.paymentMethod,
@@ -26,6 +27,7 @@ class Order {
     this.loadSizeKg,
     this.washOption,
     this.dryerMachineId,
+    this.ironingMachineId,
   });
 
   final int id;
@@ -33,6 +35,7 @@ class Order {
   final int customerId;
   final int? createdByUserId;
   final String serviceType;
+  final List<String> selectedServices;
   final double amount;
   final String status;
   final String paymentMethod;
@@ -42,6 +45,7 @@ class Order {
   final int? loadSizeKg;
   final String? washOption;
   final int? dryerMachineId;
+  final int? ironingMachineId;
 
   Order copyWith({
     int? id,
@@ -49,6 +53,7 @@ class Order {
     int? customerId,
     Object? createdByUserId = _sentinel,
     String? serviceType,
+    List<String>? selectedServices,
     double? amount,
     String? status,
     String? paymentMethod,
@@ -58,6 +63,7 @@ class Order {
     Object? loadSizeKg = _sentinel,
     Object? washOption = _sentinel,
     Object? dryerMachineId = _sentinel,
+    Object? ironingMachineId = _sentinel,
   }) {
     return Order(
       id: id ?? this.id,
@@ -67,6 +73,7 @@ class Order {
           ? this.createdByUserId
           : createdByUserId as int?,
       serviceType: serviceType ?? this.serviceType,
+      selectedServices: selectedServices ?? this.selectedServices,
       amount: amount ?? this.amount,
       status: status ?? this.status,
       paymentMethod: paymentMethod ?? this.paymentMethod,
@@ -82,6 +89,9 @@ class Order {
       dryerMachineId: identical(dryerMachineId, _sentinel)
           ? this.dryerMachineId
           : dryerMachineId as int?,
+      ironingMachineId: identical(ironingMachineId, _sentinel)
+          ? this.ironingMachineId
+          : ironingMachineId as int?,
     );
   }
 }

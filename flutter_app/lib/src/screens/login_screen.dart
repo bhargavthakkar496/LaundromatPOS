@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/demo_pos_repository.dart';
-import '../models/pos_user.dart';
+import '../data/pos_repository.dart';
+import '../models/auth_session.dart';
 import 'customer_profile_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,8 +11,8 @@ class LoginScreen extends StatefulWidget {
     required this.onLoginSuccess,
   });
 
-  final DemoPosRepository repository;
-  final Future<void> Function(PosUser user) onLoginSuccess;
+  final PosRepository repository;
+  final Future<void> Function(AuthSession session) onLoginSuccess;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _message = null;
     });
 
-    final PosUser? user = await widget.repository.login(
+    final AuthSession? session = await widget.repository.login(
       _usernameController.text.trim(),
       _pinController.text.trim(),
     );
@@ -50,14 +50,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _submitting = false;
     });
 
-    if (user == null) {
+    if (session == null) {
       setState(() {
-        _message = 'Login failed. Use admin / 1234.';
+        _message = 'Login failed. Check your credentials or backend connection.';
       });
       return;
     }
 
-    await widget.onLoginSuccess(user);
+    await widget.onLoginSuccess(session);
   }
 
   @override
@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _message ?? 'Demo credentials: admin / 1234',
+                      _message ?? 'Use your operator credentials.',
                       style: TextStyle(
                         color: _message == null
                             ? Colors.black54

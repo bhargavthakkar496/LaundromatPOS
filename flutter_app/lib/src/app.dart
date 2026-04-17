@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'data/demo_pos_repository.dart';
-import 'models/pos_user.dart';
+import 'data/pos_repository.dart';
+import 'models/auth_session.dart';
 import 'screens/customer_self_service_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/machine_list_screen.dart';
@@ -14,34 +14,34 @@ class LaundromatPosApp extends StatefulWidget {
     super.key,
     required this.repository,
     required this.sessionStore,
-    required this.currentUser,
+    required this.currentSession,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final SessionStore sessionStore;
-  final PosUser? currentUser;
+  final AuthSession? currentSession;
 
   @override
   State<LaundromatPosApp> createState() => _LaundromatPosAppState();
 }
 
 class _LaundromatPosAppState extends State<LaundromatPosApp> {
-  late PosUser? _currentUser;
+  late AuthSession? _currentSession;
   bool _shouldAutoOpenCustomerScreen = false;
 
   @override
   void initState() {
     super.initState();
-    _currentUser = widget.currentUser;
+    _currentSession = widget.currentSession;
   }
 
-  Future<void> _handleLogin(PosUser user) async {
-    await widget.sessionStore.saveSession(user);
+  Future<void> _handleLogin(AuthSession session) async {
+    await widget.sessionStore.saveSession(session);
     if (!mounted) {
       return;
     }
     setState(() {
-      _currentUser = user;
+      _currentSession = session;
       _shouldAutoOpenCustomerScreen = true;
     });
   }
@@ -52,7 +52,7 @@ class _LaundromatPosAppState extends State<LaundromatPosApp> {
       return;
     }
     setState(() {
-      _currentUser = null;
+      _currentSession = null;
       _shouldAutoOpenCustomerScreen = false;
     });
   }
@@ -74,14 +74,14 @@ class _LaundromatPosAppState extends State<LaundromatPosApp> {
       theme: AppTheme.light(),
       home: AppRoutes.isCustomerDisplayMode
           ? CustomerSelfServiceScreen(repository: widget.repository)
-          : _currentUser == null
+          : _currentSession == null
               ? LoginScreen(
                   repository: widget.repository,
                   onLoginSuccess: _handleLogin,
                 )
               : MachineListScreen(
                   repository: widget.repository,
-                  user: _currentUser!,
+                  user: _currentSession!.user,
                   onLogout: _handleLogout,
                   shouldAutoOpenCustomerScreen: _shouldAutoOpenCustomerScreen,
                   onCustomerScreenAutoOpened: _handleCustomerScreenAutoOpened,

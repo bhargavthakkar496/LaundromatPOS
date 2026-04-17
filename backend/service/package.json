@@ -1,0 +1,31 @@
+{
+  "name": "laundromat-pos-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test:integration": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "pg": "^8.15.6",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.15.3",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

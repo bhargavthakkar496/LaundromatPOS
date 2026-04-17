@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
 import '../services/open_external_url.dart';
@@ -19,7 +19,7 @@ class MachineOverviewScreen extends StatefulWidget {
     required this.onLogout,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final PosUser user;
   final Future<void> Function() onLogout;
 
@@ -28,10 +28,17 @@ class MachineOverviewScreen extends StatefulWidget {
 }
 
 class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
+  static const List<String> _machineCategories = [
+    Machine.washerType,
+    Machine.dryerType,
+    Machine.ironingStationType,
+  ];
+
   Timer? _refreshTimer;
   final Map<int, String> _lastKnownStatusByMachineId = {};
   final Set<int> _autoNotifiedCompletionOrderIds = <int>{};
   List<Machine> _machines = const [];
+  String _selectedCategory = Machine.washerType;
   bool _loading = true;
 
   @override
@@ -94,9 +101,31 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
     }
     setState(() {
       _machines = machines;
+      if (!_availableCategories.contains(_selectedCategory) &&
+          _availableCategories.isNotEmpty) {
+        _selectedCategory = _availableCategories.first;
+      }
       _loading = false;
     });
   }
+
+  List<String> get _availableCategories {
+    final available = _machineCategories
+        .where(
+          (category) => _machines.any(
+            (machine) => machine.type.toLowerCase() == category.toLowerCase(),
+          ),
+        )
+        .toList();
+    return available;
+  }
+
+  List<Machine> get _visibleMachines => _machines
+      .where(
+        (machine) =>
+            machine.type.toLowerCase() == _selectedCategory.toLowerCase(),
+      )
+      .toList();
 
   Future<void> _handleAutomaticCompletionNotifications(
     List<Machine> machines,
@@ -181,14 +210,14 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
     if (machine.isInUse) {
       final remaining = machine.remainingCycleDuration;
       if (remaining == null) {
-        return 'Wash started';
+        return '${machine.type} started';
       }
       final minutes = remaining.inMinutes;
       final seconds = remaining.inSeconds % 60;
       final formatted = minutes > 0
           ? '${minutes}m ${seconds.toString().padLeft(2, '0')}s left'
           : '${seconds}s left';
-      return 'Wash started • $formatted';
+      return '${machine.type} started • $formatted';
     }
     if (machine.isReadyForPickup) {
       return 'Completed • Ready for pickup';
@@ -214,6 +243,8 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visibleMachines = _visibleMachines;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Machine Overview')),
       body: _loading
@@ -222,7 +253,39 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
               ? const Center(child: Text('No machines found.'))
               : ListView(
                   padding: const EdgeInsets.all(20),
-                  children: _machines
+                  children: [
+                    if (_availableCategories.isNotEmpty) ...[
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: _availableCategories
+                              .map(
+                                (category) => ChoiceChip(
+                                  label: Text(category),
+                                  selected: _selectedCategory == category,
+                                  onSelected: (_) {
+                                    setState(() {
+                                      _selectedCategory = category;
+                                    });
+                                  },
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    if (visibleMachines.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 24),
+                        child: Center(
+                          child: Text('No machines found in this category.'),
+                        ),
+                      )
+                    else
+                      ...visibleMachines
                       .map(
                         (machine) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -252,8 +315,14 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                               ),
                               trailing: machine.isAvailable
                                   ? FilledButton.tonal(
-                                      onPressed: () => _startCheckout(machine),
-                                      child: const Text('Start'),
+                                      onPressed: machine.isIroningStation
+                                          ? null
+                                          : () => _startCheckout(machine),
+                                      child: Text(
+                                        machine.isIroningStation
+                                            ? 'Available'
+                                            : 'Start',
+                                      ),
                                     )
                                   : machine.isInUse || machine.isReadyForPickup
                                       ? PopupMenuButton<String>(
@@ -293,13 +362,16 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                                         )
                                       : const Icon(Icons.build_outlined),
                               onTap: machine.isAvailable
-                                  ? () => _startCheckout(machine)
+                                  ? machine.isIroningStation
+                                      ? null
+                                      : () => _startCheckout(machine)
                                   : null,
                             ),
                           ),
                         ),
                       )
                       .toList(),
+                  ],
                 ),
     );
   }

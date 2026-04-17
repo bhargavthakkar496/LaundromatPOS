@@ -1,3 +1,5 @@
+// ignore_for_file: annotate_overrides
+
 import 'dart:convert';
 import 'dart:math';
 import 'dart:async';
@@ -14,10 +16,12 @@ import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
 import '../models/pos_user.dart';
 import '../models/reservation_history_item.dart';
+import '../models/auth_session.dart';
 import '../services/machine_integration_factory.dart';
 import '../services/machine_integration_service.dart';
+import 'pos_repository.dart';
 
-class DemoPosRepository {
+class DemoPosRepository implements PosRepository {
   static const _customersKey = 'customers_v1';
   static const _ordersKey = 'orders_v1';
   static const _machinesKey = 'machines_v1';
@@ -151,6 +155,30 @@ class DemoPosRepository {
           price: 220,
           status: MachineStatus.available,
         ),
+        Machine(
+          id: 10,
+          name: 'Ironing Station 01',
+          type: 'Ironing Station',
+          capacityKg: 6,
+          price: 80,
+          status: MachineStatus.available,
+        ),
+        Machine(
+          id: 11,
+          name: 'Ironing Station 02',
+          type: 'Ironing Station',
+          capacityKg: 8,
+          price: 95,
+          status: MachineStatus.available,
+        ),
+        Machine(
+          id: 12,
+          name: 'Ironing Station 03',
+          type: 'Ironing Station',
+          capacityKg: 10,
+          price: 110,
+          status: MachineStatus.maintenance,
+        ),
       ]);
     }
 
@@ -192,6 +220,10 @@ class DemoPosRepository {
           customerId: 2,
           createdByUserId: 1,
           serviceType: 'WASH',
+          selectedServices: const [
+            LaundryService.washing,
+            LaundryService.drying,
+          ],
           amount: 255,
           status: OrderStatus.inProgress,
           paymentMethod: 'Counter Booking',
@@ -208,6 +240,10 @@ class DemoPosRepository {
           customerId: 1,
           createdByUserId: 1,
           serviceType: 'WASH',
+          selectedServices: const [
+            LaundryService.washing,
+            LaundryService.drying,
+          ],
           amount: 300,
           status: OrderStatus.completed,
           paymentMethod: 'UPI QR',
@@ -224,6 +260,10 @@ class DemoPosRepository {
           customerId: 3,
           createdByUserId: 1,
           serviceType: 'WASH',
+          selectedServices: const [
+            LaundryService.washing,
+            LaundryService.drying,
+          ],
           amount: 330,
           status: OrderStatus.booked,
           paymentMethod: 'Counter Booking',
@@ -252,12 +292,16 @@ class DemoPosRepository {
     _reservationCounter = max(_reservationCounter, _reservations.length);
   }
 
-  Future<PosUser?> login(String username, String pin) async {
+  Future<AuthSession?> login(String username, String pin) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     for (final user in _users) {
       if (user.username == username && user.pin == pin) {
-        return user;
+        return AuthSession(
+          accessToken: 'demo-token-${user.id}',
+          refreshToken: 'demo-refresh-${user.id}',
+          user: user,
+        );
       }
     }
 
@@ -413,12 +457,18 @@ class DemoPosRepository {
     await _loadPersistedState();
     final cycleStart = DateTime.now();
     final cycleEnd = cycleStart.add(machine.cycleDuration);
+    final selectedServices = <String>[
+      if (machine.isWasher) LaundryService.washing,
+      if (machine.isDryer) LaundryService.drying,
+      if (machine.isIroningStation) LaundryService.ironing,
+    ];
     final order = Order(
       id: ++_orderCounter,
       machineId: machine.id,
       customerId: customer.id,
       createdByUserId: user?.id,
       serviceType: machine.type.toUpperCase(),
+      selectedServices: selectedServices,
       amount: machine.price,
       status: OrderStatus.inProgress,
       paymentMethod: paymentMethod,
@@ -426,7 +476,7 @@ class DemoPosRepository {
       paymentReference: paymentReference ?? _paymentReference(referencePrefix),
       timestamp: DateTime.now(),
       loadSizeKg: machine.capacityKg,
-      washOption: 'Standard Wash',
+      washOption: machine.isWasher ? 'Standard Wash' : null,
     );
     _orders.insert(0, order);
     final machineIndex = _machines.indexWhere((item) => item.id == machine.id);
@@ -497,6 +547,9 @@ class DemoPosRepository {
         dryerMachine: order.dryerMachineId == null
             ? null
             : _machines.firstWhere((item) => item.id == order.dryerMachineId),
+        ironingMachine: order.ironingMachineId == null
+            ? null
+            : _machines.firstWhere((item) => item.id == order.ironingMachineId),
       );
     }).toList();
   }
@@ -525,6 +578,9 @@ class DemoPosRepository {
       dryerMachine: order.dryerMachineId == null
           ? null
           : _machines.firstWhere((item) => item.id == order.dryerMachineId),
+      ironingMachine: order.ironingMachineId == null
+          ? null
+          : _machines.firstWhere((item) => item.id == order.ironingMachineId),
     );
   }
 
@@ -532,9 +588,11 @@ class DemoPosRepository {
     required String customerName,
     required String customerPhone,
     required int loadSizeKg,
-    required String washOption,
-    required Machine washer,
-    required Machine dryer,
+    required List<String> selectedServices,
+    String? washOption,
+    Machine? washer,
+    Machine? dryer,
+    Machine? ironingStation,
     required String orderStatus,
     String paymentMethod = 'Counter Booking',
     PosUser? user,
@@ -546,13 +604,23 @@ class DemoPosRepository {
       phone: customerPhone,
       preferredWasherSizeKg: loadSizeKg,
     );
+    final primaryMachine = washer ?? dryer ?? ironingStation;
+    if (primaryMachine == null) {
+      throw StateError('At least one machine assignment is required.');
+    }
+    final amount = [
+      washer?.price,
+      dryer?.price,
+      ironingStation?.price,
+    ].whereType<double>().fold<double>(0, (sum, value) => sum + value);
     final order = Order(
       id: ++_orderCounter,
-      machineId: washer.id,
+      machineId: primaryMachine.id,
       customerId: customer.id,
       createdByUserId: user?.id,
-      serviceType: 'WASH',
-      amount: washer.price + dryer.price,
+      serviceType: selectedServices.map((item) => item.toUpperCase()).join('+'),
+      selectedServices: selectedServices,
+      amount: amount,
       status: orderStatus,
       paymentMethod: paymentMethod,
       paymentStatus: orderStatus == OrderStatus.booked
@@ -562,25 +630,27 @@ class DemoPosRepository {
       timestamp: DateTime.now(),
       loadSizeKg: loadSizeKg,
       washOption: washOption,
-      dryerMachineId: dryer.id,
+      dryerMachineId: dryer?.id,
+      ironingMachineId: ironingStation?.id,
     );
     _orders.insert(0, order);
 
     if (orderStatus == OrderStatus.inProgress) {
-      final washerIndex = _machines.indexWhere((item) => item.id == washer.id);
-      if (washerIndex != -1) {
+      final machineIndex =
+          _machines.indexWhere((item) => item.id == primaryMachine.id);
+      if (machineIndex != -1) {
         final cycleStart = DateTime.now();
-        _machines[washerIndex] = _machines[washerIndex].copyWith(
+        _machines[machineIndex] = _machines[machineIndex].copyWith(
           status: MachineStatus.inUse,
           currentOrderId: order.id,
           cycleStartedAt: cycleStart,
-          cycleEndsAt: cycleStart.add(_machines[washerIndex].cycleDuration),
+          cycleEndsAt: cycleStart.add(_machines[machineIndex].cycleDuration),
         );
         await _machineIntegration.startCycle(
-          machine: _machines[washerIndex],
+          machine: _machines[machineIndex],
           orderId: order.id,
           startedAt: cycleStart,
-          endsAt: cycleStart.add(_machines[washerIndex].cycleDuration),
+          endsAt: cycleStart.add(_machines[machineIndex].cycleDuration),
         );
       }
     }
@@ -603,9 +673,11 @@ class DemoPosRepository {
     required String customerName,
     required String customerPhone,
     required int loadSizeKg,
-    required String washOption,
-    required Machine washer,
-    required Machine dryer,
+    required List<String> selectedServices,
+    String? washOption,
+    Machine? washer,
+    Machine? dryer,
+    Machine? ironingStation,
     required String paymentMethod,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -614,9 +686,11 @@ class DemoPosRepository {
       customerName: customerName,
       customerPhone: customerPhone,
       loadSizeKg: loadSizeKg,
+      selectedServices: selectedServices,
       washOption: washOption,
-      washerMachineId: washer.id,
-      dryerMachineId: dryer.id,
+      washerMachineId: washer?.id,
+      dryerMachineId: dryer?.id,
+      ironingMachineId: ironingStation?.id,
       paymentMethod: paymentMethod,
       stage: ActiveOrderSessionStage.draft,
       createdAt: DateTime.now(),
@@ -642,19 +716,25 @@ class DemoPosRepository {
       return session;
     }
 
-    final washer = await getMachineById(session.washerMachineId);
-    final dryer = await getMachineById(session.dryerMachineId);
-    if (washer == null || dryer == null) {
-      return null;
-    }
+    final washer = session.washerMachineId == null
+        ? null
+        : await getMachineById(session.washerMachineId!);
+    final dryer = session.dryerMachineId == null
+        ? null
+        : await getMachineById(session.dryerMachineId!);
+    final ironingStation = session.ironingMachineId == null
+        ? null
+        : await getMachineById(session.ironingMachineId!);
 
     final order = await createManualOrder(
       customerName: session.customerName,
       customerPhone: session.customerPhone,
       loadSizeKg: session.loadSizeKg,
+      selectedServices: session.selectedServices,
       washOption: session.washOption,
       washer: washer,
       dryer: dryer,
+      ironingStation: ironingStation,
       orderStatus: OrderStatus.booked,
       paymentMethod: session.paymentMethod,
       user: user,
@@ -695,22 +775,24 @@ class DemoPosRepository {
     );
     _orders[orderIndex] = updatedOrder;
 
-    final washerIndex = _machines.indexWhere(
-      (item) => item.id == session.washerMachineId,
+    final startMachineId =
+        session.washerMachineId ?? session.dryerMachineId ?? session.ironingMachineId;
+    final machineIndex = _machines.indexWhere(
+      (item) => item.id == startMachineId,
     );
-    if (washerIndex != -1) {
+    if (machineIndex != -1) {
       final cycleStart = DateTime.now();
-      _machines[washerIndex] = _machines[washerIndex].copyWith(
+      _machines[machineIndex] = _machines[machineIndex].copyWith(
         status: MachineStatus.inUse,
         currentOrderId: updatedOrder.id,
         cycleStartedAt: cycleStart,
-        cycleEndsAt: cycleStart.add(_machines[washerIndex].cycleDuration),
+        cycleEndsAt: cycleStart.add(_machines[machineIndex].cycleDuration),
       );
       await _machineIntegration.startCycle(
-        machine: _machines[washerIndex],
+        machine: _machines[machineIndex],
         orderId: updatedOrder.id,
         startedAt: cycleStart,
-        endsAt: cycleStart.add(_machines[washerIndex].cycleDuration),
+        endsAt: cycleStart.add(_machines[machineIndex].cycleDuration),
       );
     }
 
@@ -1012,6 +1094,7 @@ class DemoPosRepository {
                 'customerId': order.customerId,
                 'createdByUserId': order.createdByUserId,
                 'serviceType': order.serviceType,
+                'selectedServices': order.selectedServices,
                 'amount': order.amount,
                 'status': order.status,
                 'paymentMethod': order.paymentMethod,
@@ -1021,6 +1104,7 @@ class DemoPosRepository {
                 'loadSizeKg': order.loadSizeKg,
                 'washOption': order.washOption,
                 'dryerMachineId': order.dryerMachineId,
+                'ironingMachineId': order.ironingMachineId,
               },
             )
             .toList(),
@@ -1109,6 +1193,10 @@ class DemoPosRepository {
             customerId: item['customerId'] as int,
             createdByUserId: item['createdByUserId'] as int?,
             serviceType: item['serviceType'] as String,
+            selectedServices:
+                (item['selectedServices'] as List<dynamic>? ?? const [])
+                    .map((entry) => entry as String)
+                    .toList(),
             amount: (item['amount'] as num).toDouble(),
             status: item['status'] as String,
             paymentMethod: item['paymentMethod'] as String,
@@ -1118,6 +1206,7 @@ class DemoPosRepository {
             loadSizeKg: item['loadSizeKg'] as int?,
             washOption: item['washOption'] as String?,
             dryerMachineId: item['dryerMachineId'] as int?,
+            ironingMachineId: item['ironingMachineId'] as int?,
           ),
         )
         .toList();

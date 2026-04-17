@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
 
 import 'src/app.dart';
+import 'src/data/backend_pos_repository.dart';
 import 'src/data/demo_pos_repository.dart';
+import 'src/data/pos_repository.dart';
+import 'src/services/backend_api_client.dart';
+import 'src/services/backend_config.dart';
 import 'src/services/session_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final repository = DemoPosRepository();
-  await repository.initialize();
   final sessionStore = SessionStore();
-  final currentUser = await sessionStore.loadSession();
+  final PosRepository repository =
+      BackendConfig.useBackend && BackendConfig.hasBackendBaseUrl
+          ? BackendPosRepository(
+              apiClient: BackendApiClient(
+                baseUrl: BackendConfig.baseUrl,
+                sessionStore: sessionStore,
+              ),
+            )
+          : DemoPosRepository();
+  await repository.initialize();
+  final currentSession = await sessionStore.loadSession();
   runApp(
     LaundromatPosApp(
       repository: repository,
       sessionStore: sessionStore,
-      currentUser: currentUser,
+      currentSession: currentSession,
     ),
   );
 }

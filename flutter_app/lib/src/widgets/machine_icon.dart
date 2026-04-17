@@ -15,12 +15,37 @@ class MachineIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = machine.isWasher
-        ? const Color(0xFFD7F0FF)
-        : const Color(0xFFFFE8CC);
-    final tint = machine.isWasher
-        ? const Color(0xFF0E7490)
-        : const Color(0xFFC86B3C);
+    final Color background;
+    final Color tint;
+    final Widget icon;
+
+    if (machine.isWasher) {
+      background = const Color(0xFFD7F0FF);
+      tint = const Color(0xFF0E7490);
+      icon = SvgPicture.asset(
+        machine.iconAsset!,
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+      );
+    } else if (machine.isDryer) {
+      background = const Color(0xFFFFE8CC);
+      tint = const Color(0xFFC86B3C);
+      icon = SvgPicture.asset(
+        machine.iconAsset!,
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+      );
+    } else {
+      background = const Color(0xFFE6F7EB);
+      tint = const Color(0xFF2F855A);
+      icon = Icon(
+        Icons.iron_outlined,
+        size: size,
+        color: tint,
+      );
+    }
 
     return Container(
       width: size + 20,
@@ -30,12 +55,7 @@ class MachineIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       padding: const EdgeInsets.all(10),
-      child: SvgPicture.asset(
-        machine.iconAsset,
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
-      ),
+      child: icon,
     );
   }
 }

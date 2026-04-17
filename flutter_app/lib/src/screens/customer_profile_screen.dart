@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/customer_profile.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
@@ -9,7 +9,7 @@ import '../widgets/machine_icon.dart';
 class CustomerProfileScreen extends StatefulWidget {
   const CustomerProfileScreen({super.key, required this.repository});
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
 
   @override
   State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();

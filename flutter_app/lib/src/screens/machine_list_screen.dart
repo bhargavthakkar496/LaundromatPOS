@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
-import '../data/demo_pos_repository.dart';
+import '../data/pos_repository.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
 import '../services/app_routes.dart';
@@ -28,7 +28,7 @@ class MachineListScreen extends StatefulWidget {
     required this.onCustomerScreenAutoOpened,
   });
 
-  final DemoPosRepository repository;
+  final PosRepository repository;
   final PosUser user;
   final Future<void> Function() onLogout;
   final bool shouldAutoOpenCustomerScreen;

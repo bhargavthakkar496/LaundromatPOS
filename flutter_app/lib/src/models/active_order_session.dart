@@ -4,17 +4,25 @@ class ActiveOrderSessionStage {
   static const paid = 'PAID';
 }
 
+class LaundryService {
+  static const washing = 'Washing';
+  static const drying = 'Drying';
+  static const ironing = 'Ironing';
+}
+
 class ActiveOrderSession {
   const ActiveOrderSession({
     required this.customerName,
     required this.customerPhone,
     required this.loadSizeKg,
-    required this.washOption,
-    required this.washerMachineId,
-    required this.dryerMachineId,
+    required this.selectedServices,
     required this.paymentMethod,
     required this.stage,
     required this.createdAt,
+    this.washOption,
+    this.washerMachineId,
+    this.dryerMachineId,
+    this.ironingMachineId,
     this.confirmedBy,
     this.orderId,
     this.paymentReference,
@@ -23,15 +31,21 @@ class ActiveOrderSession {
   final String customerName;
   final String customerPhone;
   final int loadSizeKg;
-  final String washOption;
-  final int washerMachineId;
-  final int dryerMachineId;
+  final List<String> selectedServices;
+  final String? washOption;
+  final int? washerMachineId;
+  final int? dryerMachineId;
+  final int? ironingMachineId;
   final String paymentMethod;
   final String stage;
   final DateTime createdAt;
   final String? confirmedBy;
   final int? orderId;
   final String? paymentReference;
+
+  bool get includesWashing => selectedServices.contains(LaundryService.washing);
+  bool get includesDrying => selectedServices.contains(LaundryService.drying);
+  bool get includesIroning => selectedServices.contains(LaundryService.ironing);
 
   bool get isDraft => stage == ActiveOrderSessionStage.draft;
   bool get isBooked => stage == ActiveOrderSessionStage.booked;
@@ -41,9 +55,11 @@ class ActiveOrderSession {
     String? customerName,
     String? customerPhone,
     int? loadSizeKg,
-    String? washOption,
-    int? washerMachineId,
-    int? dryerMachineId,
+    List<String>? selectedServices,
+    Object? washOption = _sentinel,
+    Object? washerMachineId = _sentinel,
+    Object? dryerMachineId = _sentinel,
+    Object? ironingMachineId = _sentinel,
     String? paymentMethod,
     String? stage,
     DateTime? createdAt,
@@ -55,9 +71,19 @@ class ActiveOrderSession {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       loadSizeKg: loadSizeKg ?? this.loadSizeKg,
-      washOption: washOption ?? this.washOption,
-      washerMachineId: washerMachineId ?? this.washerMachineId,
-      dryerMachineId: dryerMachineId ?? this.dryerMachineId,
+      selectedServices: selectedServices ?? this.selectedServices,
+      washOption: identical(washOption, _sentinel)
+          ? this.washOption
+          : washOption as String?,
+      washerMachineId: identical(washerMachineId, _sentinel)
+          ? this.washerMachineId
+          : washerMachineId as int?,
+      dryerMachineId: identical(dryerMachineId, _sentinel)
+          ? this.dryerMachineId
+          : dryerMachineId as int?,
+      ironingMachineId: identical(ironingMachineId, _sentinel)
+          ? this.ironingMachineId
+          : ironingMachineId as int?,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       stage: stage ?? this.stage,
       createdAt: createdAt ?? this.createdAt,
@@ -76,9 +102,11 @@ class ActiveOrderSession {
       'customerName': customerName,
       'customerPhone': customerPhone,
       'loadSizeKg': loadSizeKg,
+      'selectedServices': selectedServices,
       'washOption': washOption,
       'washerMachineId': washerMachineId,
       'dryerMachineId': dryerMachineId,
+      'ironingMachineId': ironingMachineId,
       'paymentMethod': paymentMethod,
       'stage': stage,
       'createdAt': createdAt.toIso8601String(),
@@ -93,9 +121,13 @@ class ActiveOrderSession {
       customerName: json['customerName'] as String,
       customerPhone: json['customerPhone'] as String,
       loadSizeKg: json['loadSizeKg'] as int,
-      washOption: json['washOption'] as String,
-      washerMachineId: json['washerMachineId'] as int,
-      dryerMachineId: json['dryerMachineId'] as int,
+      selectedServices: (json['selectedServices'] as List<dynamic>? ?? const [])
+          .map((item) => item as String)
+          .toList(),
+      washOption: json['washOption'] as String?,
+      washerMachineId: json['washerMachineId'] as int?,
+      dryerMachineId: json['dryerMachineId'] as int?,
+      ironingMachineId: json['ironingMachineId'] as int?,
       paymentMethod: json['paymentMethod'] as String,
       stage: json['stage'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
