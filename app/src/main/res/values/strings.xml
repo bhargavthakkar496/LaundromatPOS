@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Laundromat POS</string>
+    <string name="demo_login_hint">Use demo login: admin / 1234</string>
+    <string name="login_self_service">Open Self-Service</string>
+    <string name="login_username">Username</string>
+    <string name="login_pin">PIN</string>
+    <string name="login_cta">Sign In</string>
+    <string name="login_validation_error">Enter both username and PIN.</string>
+    <string name="login_loading">Checking credentials...</string>
+    <string name="login_failed">Login failed. Try admin / 1234.</string>
+    <string name="machine_welcome">Welcome, %1$s</string>
+    <string name="machine_subtitle">Choose a machine to start a checkout.</string>
+    <string name="machine_empty">No machines are available yet.</string>
+    <string name="machine_not_found">Machine not found.</string>
+    <string name="checkout_title">Checkout</string>
+    <string name="checkout_amount">Amount: INR %.2f</string>
+    <string name="checkout_pay">Complete Payment</string>
+    <string name="checkout_success">Order #%1$d completed.</string>
+    <string name="customer_name">Customer name</string>
+    <string name="customer_phone">Customer phone</string>
+    <string name="customer_pay_prompt">Scan QR to Pay</string>
+    <string name="customer_payment_processing">Processing payment...</string>
+    <string name="customer_payment_success">Payment received</string>
+    <string name="customer_order_ready">Order ready for payment</string>
+    <string name="customer_order_processing">Please wait</string>
+    <string name="customer_order_complete">Thank you</string>
+    <string name="customer_reference">Ref: %1$s</string>
+    <string name="customer_self_service_title">Self-Service Laundry</string>
+    <string name="customer_self_service_subtitle">Choose a machine, add your details, and pay from the customer screen.</string>
+    <string name="customer_self_service_selected_machine">Selected machine: %1$s</string>
+    <string name="customer_self_service_no_machine">Tap a machine below to begin.</string>
+    <string name="customer_self_service_machine_header">Available Machines</string>
+    <string name="customer_self_service_pay">Pay and Start Order</string>
+    <string name="customer_self_service_payment_success">Payment successful for order #%1$d</string>
+    <string name="customer_self_service_machine_required">Select a machine before paying.</string>
+    <string name="customer_self_service_loading">Loading machines...</string>
+    <string name="customer_self_service_empty">No customer-ready machines are available right now.</string>
+    <string name="customer_self_service_thank_you">Thanks! Your machine is reserved and payment is complete.</string>
+    <string name="customer_self_service_walk_in">Walk-in Customer</string>
+    <string name="order_history_title">Order History</string>
+    <string name="order_empty">No orders have been created yet.</string>
+    <string name="back_to_machines">Back to Machines</string>
+
+    <string-array name="payment_methods">
+        <item>QR</item>
+        <item>Cash</item>
+        <item>Card</item>
+    </string-array>
+</resources>
