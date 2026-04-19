@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
 import '../models/active_order_session.dart';
+import '../models/customer_profile.dart';
 import '../models/machine.dart';
+import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
+import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
 import '../widgets/payment_status_sheet.dart';
 
@@ -32,10 +36,16 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
   bool _loading = true;
   bool _confirming = false;
   bool _processingPayment = false;
+  bool _lookingUpProfile = false;
+  int? _reorderingOrderId;
   Timer? _refreshTimer;
   Timer? _resetTimer;
   String? _dismissedSessionKey;
   String? _scheduledResetSessionKey;
+  final TextEditingController _repeatCustomerPhoneController =
+      TextEditingController();
+  CustomerProfile? _repeatCustomerProfile;
+  String? _repeatLookupMessage;
 
   @override
   void initState() {
@@ -56,6 +66,7 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _resetTimer?.cancel();
+    _repeatCustomerPhoneController.dispose();
     super.dispose();
   }
 
@@ -117,8 +128,9 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
     final washer = _machineById(session.washerMachineId);
     final dryer = _machineById(session.dryerMachineId);
     final ironingStation = _machineById(session.ironingMachineId);
-    final amount =
-        (washer?.price ?? 0) + (dryer?.price ?? 0) + (ironingStation?.price ?? 0);
+    final amount = (washer?.price ?? 0) +
+        (dryer?.price ?? 0) +
+        (ironingStation?.price ?? 0);
 
     setState(() {
       _processingPayment = true;
@@ -159,6 +171,95 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
       _processingPayment = false;
     });
     _scheduleResetIfNeeded(updated);
+    _refresh(silent: true);
+  }
+
+  Future<void> _lookupRepeatCustomer() async {
+    final phone = _repeatCustomerPhoneController.text.trim();
+    final phoneError = CustomerDetailsForm.validatePhone(phone);
+    if (phoneError != null) {
+      setState(() {
+        _repeatCustomerProfile = null;
+        _repeatLookupMessage = phoneError;
+      });
+      return;
+    }
+
+    setState(() {
+      _lookingUpProfile = true;
+      _repeatLookupMessage = null;
+    });
+
+    final profile = await widget.repository.getCustomerProfileByPhone(phone);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _lookingUpProfile = false;
+      _repeatCustomerProfile = profile;
+      _repeatLookupMessage = profile == null
+          ? 'No repeat-customer profile was found for that phone number yet.'
+          : null;
+    });
+  }
+
+  Future<void> _repeatPreviousOrder(
+    CustomerProfile profile,
+    OrderHistoryItem item,
+  ) async {
+    if (_session != null && !_session!.isPaid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Finish or clear the current order before starting a repeat order.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _reorderingOrderId = item.order.id;
+    });
+
+    final selectedServices = item.order.selectedServices.isNotEmpty
+        ? item.order.selectedServices
+        : <String>[item.order.serviceType];
+
+    final builtSession = await widget.repository.saveActiveOrderDraft(
+      customerName: profile.customer.fullName,
+      customerPhone: profile.customer.phone,
+      loadSizeKg:
+          item.order.loadSizeKg ?? profile.customer.preferredWasherSizeKg ?? 8,
+      selectedServices: selectedServices,
+      washOption: item.order.washOption,
+      washer: _machineById(item.machine.id) ?? item.machine,
+      dryer: item.dryerMachine == null
+          ? null
+          : (_machineById(item.dryerMachine!.id) ?? item.dryerMachine),
+      ironingStation: item.ironingMachine == null
+          ? null
+          : (_machineById(item.ironingMachine!.id) ?? item.ironingMachine),
+      paymentMethod: item.order.paymentMethod,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _reorderingOrderId = null;
+      _session = _visibleSessionForCustomer(builtSession);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Repeat order is ready and now visible on both customer and operator screens.',
+        ),
+      ),
+    );
     _refresh(silent: true);
   }
 
@@ -298,6 +399,19 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  if (session == null) ...[
+                    _RepeatCustomerLookupCard(
+                      phoneController: _repeatCustomerPhoneController,
+                      loading: _lookingUpProfile,
+                      message: _repeatLookupMessage,
+                      profile: _repeatCustomerProfile,
+                      reorderingOrderId: _reorderingOrderId,
+                      onLookup: _lookupRepeatCustomer,
+                      onRepeatOrder: (item) =>
+                          _repeatPreviousOrder(_repeatCustomerProfile!, item),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   if (session == null)
                     Card(
                       child: Padding(
@@ -493,6 +607,277 @@ class _MachineAssignmentTile extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RepeatCustomerLookupCard extends StatelessWidget {
+  const _RepeatCustomerLookupCard({
+    required this.phoneController,
+    required this.loading,
+    required this.message,
+    required this.profile,
+    required this.reorderingOrderId,
+    required this.onLookup,
+    required this.onRepeatOrder,
+  });
+
+  final TextEditingController phoneController;
+  final bool loading;
+  final String? message;
+  final CustomerProfile? profile;
+  final int? reorderingOrderId;
+  final VoidCallback onLookup;
+  final ValueChanged<OrderHistoryItem> onRepeatOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final recentOrders = [...?profile?.orders]..sort(
+        (left, right) => right.order.timestamp.compareTo(left.order.timestamp),
+      );
+    final lastOrder = recentOrders.isEmpty ? null : recentOrders.first;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Repeat Customer Quick Order',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Registered customers can enter their phone number to review past orders, saved preferences, and instantly rebuild a familiar order on both screens.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Customer phone number',
+                      hintText: '9876543210',
+                    ),
+                    onSubmitted: (_) => onLookup(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: loading ? null : onLookup,
+                  icon: const Icon(Icons.search_outlined),
+                  label: Text(loading ? 'Looking up...' : 'Find Customer'),
+                ),
+              ],
+            ),
+            if (message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                message!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            if (profile != null) ...[
+              const SizedBox(height: 20),
+              _RepeatCustomerProfileView(
+                profile: profile!,
+                lastOrder: lastOrder,
+                reorderingOrderId: reorderingOrderId,
+                onRepeatOrder: onRepeatOrder,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RepeatCustomerProfileView extends StatelessWidget {
+  const _RepeatCustomerProfileView({
+    required this.profile,
+    required this.lastOrder,
+    required this.reorderingOrderId,
+    required this.onRepeatOrder,
+  });
+
+  final CustomerProfile profile;
+  final OrderHistoryItem? lastOrder;
+  final int? reorderingOrderId;
+  final ValueChanged<OrderHistoryItem> onRepeatOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final recentOrders = [...profile.orders]..sort(
+        (left, right) => right.order.timestamp.compareTo(left.order.timestamp),
+      );
+    final visibleOrders = recentOrders.take(3).toList();
+    final dateFormat = DateFormat('dd MMM, hh:mm a');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                profile.customer.fullName,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(profile.customer.phone),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _RepeatStatPill(
+                    label: 'Visits',
+                    value: '${profile.totalVisits}',
+                  ),
+                  _RepeatStatPill(
+                    label: 'Spent',
+                    value: 'INR ${profile.totalSpent.toStringAsFixed(0)}',
+                  ),
+                  _RepeatStatPill(
+                    label: 'Preferred load',
+                    value: profile.customer.preferredWasherSizeKg == null
+                        ? 'Not set'
+                        : '${profile.customer.preferredWasherSizeKg}kg',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Saved preferences: detergent ${profile.customer.preferredDetergentAddOn ?? 'Not set'}, dryer ${profile.customer.preferredDryerDurationMinutes == null ? 'Not set' : '${profile.customer.preferredDryerDurationMinutes} min'}.',
+              ),
+              if (lastOrder != null) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: reorderingOrderId == lastOrder!.order.id
+                      ? null
+                      : () => onRepeatOrder(lastOrder!),
+                  icon: const Icon(Icons.history_toggle_off_outlined),
+                  label: Text(
+                    reorderingOrderId == lastOrder!.order.id
+                        ? 'Building repeat order...'
+                        : 'Repeat Last Order',
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Previous Orders',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        if (visibleOrders.isEmpty)
+          const Text('No previous orders are available yet.')
+        else
+          ...visibleOrders.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${item.machine.name} • INR ${item.order.amount.toStringAsFixed(0)}',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        Text(
+                          dateFormat.format(item.order.timestamp),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Services: ${item.order.selectedServices.join(', ')}',
+                    ),
+                    if (item.order.washOption != null)
+                      Text('Wash option: ${item.order.washOption}'),
+                    Text('Payment method: ${item.order.paymentMethod}'),
+                    if (item.dryerMachine != null)
+                      Text('Dryer: ${item.dryerMachine!.name}'),
+                    if (item.ironingMachine != null)
+                      Text('Ironing: ${item.ironingMachine!.name}'),
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: reorderingOrderId == item.order.id
+                          ? null
+                          : () => onRepeatOrder(item),
+                      icon: const Icon(Icons.replay_outlined),
+                      label: Text(
+                        reorderingOrderId == item.order.id
+                            ? 'Building order...'
+                            : 'Use This Order',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RepeatStatPill extends StatelessWidget {
+  const _RepeatStatPill({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.titleSmall),
         ],
       ),
     );

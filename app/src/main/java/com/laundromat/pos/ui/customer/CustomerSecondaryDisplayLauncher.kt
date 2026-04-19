@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.customer
+package com.washpos.app.ui.customer
 
 import android.app.Activity
 import android.app.ActivityOptions

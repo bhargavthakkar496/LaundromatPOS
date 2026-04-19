@@ -1,7 +1,7 @@
 
-package com.laundromat.pos.data.db
+package com.washpos.app.data.db
 import androidx.room.*
-import com.laundromat.pos.data.model.*
+import com.washpos.app.data.model.*
 
 @Dao
 interface PosDao {

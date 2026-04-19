@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.checkout
+package com.washpos.app.ui.checkout
 
 import android.hardware.display.DisplayManager
 import android.os.Bundle
@@ -9,15 +9,15 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.laundromat.pos.R
-import com.laundromat.pos.data.model.Machine
-import com.laundromat.pos.data.repository.PosRepository
-import com.laundromat.pos.payment.QrPaymentGateway
-import com.laundromat.pos.ui.common.UiThread
-import com.laundromat.pos.ui.customer.CustomerDisplayState
-import com.laundromat.pos.ui.customer.CustomerPresentation
-import com.laundromat.pos.ui.history.OrderHistoryActivity
-import com.laundromat.pos.ui.machine.MachineListActivity
+import com.washpos.app.R
+import com.washpos.app.data.model.Machine
+import com.washpos.app.data.repository.PosRepository
+import com.washpos.app.payment.QrPaymentGateway
+import com.washpos.app.ui.common.UiThread
+import com.washpos.app.ui.customer.CustomerDisplayState
+import com.washpos.app.ui.customer.CustomerPresentation
+import com.washpos.app.ui.history.OrderHistoryActivity
+import com.washpos.app.ui.machine.MachineListActivity
 import java.util.UUID
 
 class CheckoutActivity : AppCompatActivity() {

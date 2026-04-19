@@ -9,8 +9,8 @@ import 'services/app_routes.dart';
 import 'services/session_store.dart';
 import 'theme/app_theme.dart';
 
-class LaundromatPosApp extends StatefulWidget {
-  const LaundromatPosApp({
+class WashPosApp extends StatefulWidget {
+  const WashPosApp({
     super.key,
     required this.repository,
     required this.sessionStore,
@@ -22,10 +22,10 @@ class LaundromatPosApp extends StatefulWidget {
   final AuthSession? currentSession;
 
   @override
-  State<LaundromatPosApp> createState() => _LaundromatPosAppState();
+  State<WashPosApp> createState() => _WashPosAppState();
 }
 
-class _LaundromatPosAppState extends State<LaundromatPosApp> {
+class _WashPosAppState extends State<WashPosApp> {
   late AuthSession? _currentSession;
   bool _shouldAutoOpenCustomerScreen = false;
 
@@ -69,7 +69,7 @@ class _LaundromatPosAppState extends State<LaundromatPosApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Laundromat POS',
+      title: 'WashPOS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: AppRoutes.isCustomerDisplayMode

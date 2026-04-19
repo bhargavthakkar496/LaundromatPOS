@@ -4,12 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
-import 'package:laundromat_pos_flutter/src/app.dart';
-import 'package:laundromat_pos_flutter/src/data/demo_pos_repository.dart';
-import 'package:laundromat_pos_flutter/src/models/machine.dart';
-import 'package:laundromat_pos_flutter/src/models/order.dart';
-import 'package:laundromat_pos_flutter/src/services/machine_integration_service.dart';
-import 'package:laundromat_pos_flutter/src/services/session_store.dart';
+import 'package:washpos_flutter/src/app.dart';
+import 'package:washpos_flutter/src/data/demo_pos_repository.dart';
+import 'package:washpos_flutter/src/models/active_order_session.dart';
+import 'package:washpos_flutter/src/models/machine.dart';
+import 'package:washpos_flutter/src/models/order.dart';
+import 'package:washpos_flutter/src/services/machine_integration_service.dart';
+import 'package:washpos_flutter/src/services/session_store.dart';
 
 void main() {
   setUp(() {
@@ -25,18 +26,19 @@ void main() {
     final repository = DemoPosRepository();
     repository.seedDemoData();
     await tester.pumpWidget(
-      LaundromatPosApp(
+      WashPosApp(
         repository: repository,
         sessionStore: SessionStore(),
         currentSession: null,
       ),
     );
 
-    expect(find.text('Laundromat POS'), findsOneWidget);
+    expect(find.text('WashPOS'), findsOneWidget);
     expect(find.text('Login'), findsOneWidget);
   });
 
-  test('operator repository can load paid receipt data after customer payment', () async {
+  test('operator repository can load paid receipt data after customer payment',
+      () async {
     final operatorRepository = DemoPosRepository();
     await operatorRepository.initialize();
 
@@ -48,6 +50,10 @@ void main() {
       customerName: 'gaurang',
       customerPhone: '9033263550',
       loadSizeKg: 8,
+      selectedServices: const [
+        LaundryService.washing,
+        LaundryService.drying,
+      ],
       washOption: 'Gentle Wash',
       washer: washer,
       dryer: dryer,

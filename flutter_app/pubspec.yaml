@@ -1,5 +1,5 @@
-name: laundromat_pos_flutter
-description: Flutter scaffold for the Laundromat POS demo flow.
+name: washpos_flutter
+description: Flutter scaffold for the WashPOS demo flow.
 publish_to: "none"
 version: 0.1.0+1
 

@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.machine
+package com.washpos.app.ui.machine
 
 import android.content.Intent
 import android.os.Bundle
@@ -7,14 +7,14 @@ import android.widget.Button
 import android.widget.ListView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.laundromat.pos.R
-import com.laundromat.pos.data.model.Machine
-import com.laundromat.pos.data.model.MachineStatus
-import com.laundromat.pos.data.repository.PosRepository
-import com.laundromat.pos.ui.checkout.CheckoutActivity
-import com.laundromat.pos.ui.common.UiThread
-import com.laundromat.pos.ui.customer.CustomerSecondaryDisplayLauncher
-import com.laundromat.pos.ui.history.OrderHistoryActivity
+import com.washpos.app.R
+import com.washpos.app.data.model.Machine
+import com.washpos.app.data.model.MachineStatus
+import com.washpos.app.data.repository.PosRepository
+import com.washpos.app.ui.checkout.CheckoutActivity
+import com.washpos.app.ui.common.UiThread
+import com.washpos.app.ui.customer.CustomerSecondaryDisplayLauncher
+import com.washpos.app.ui.history.OrderHistoryActivity
 
 class MachineListActivity : AppCompatActivity() {
     private lateinit var repository: PosRepository

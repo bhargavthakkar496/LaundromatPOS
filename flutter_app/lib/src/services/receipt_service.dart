@@ -11,7 +11,7 @@ class ReceiptService {
 
   static String buildWhatsAppMessage(ReceiptData receipt) {
     final lines = [
-      'Laundromat POS Receipt',
+      'WashPOS Receipt',
       'Order #${receipt.order.id}',
       'Customer: ${receipt.customer.fullName}',
       'Phone: ${receipt.customer.phone}',
@@ -40,7 +40,7 @@ class ReceiptService {
             children: [
               pw.Center(
                 child: pw.Text(
-                  'Laundromat POS',
+                  'WashPOS',
                   style: pw.TextStyle(
                     fontSize: 18,
                     fontWeight: pw.FontWeight.bold,

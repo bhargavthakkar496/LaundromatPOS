@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.history
+package com.washpos.app.ui.history
 
 import android.content.Intent
 import android.os.Bundle
@@ -7,11 +7,11 @@ import android.widget.Button
 import android.widget.ListView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.laundromat.pos.R
-import com.laundromat.pos.data.repository.PosRepository
-import com.laundromat.pos.ui.common.UiThread
-import com.laundromat.pos.ui.customer.CustomerSecondaryDisplayLauncher
-import com.laundromat.pos.ui.machine.MachineListActivity
+import com.washpos.app.R
+import com.washpos.app.data.repository.PosRepository
+import com.washpos.app.ui.common.UiThread
+import com.washpos.app.ui.customer.CustomerSecondaryDisplayLauncher
+import com.washpos.app.ui.machine.MachineListActivity
 
 class OrderHistoryActivity : AppCompatActivity() {
     private lateinit var repository: PosRepository

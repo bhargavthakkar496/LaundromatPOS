@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Laundromat POS</string>
+    <string name="app_name">WashPOS</string>
     <string name="demo_login_hint">Use demo login: admin / 1234</string>
     <string name="login_self_service">Open Self-Service</string>
     <string name="login_username">Username</string>

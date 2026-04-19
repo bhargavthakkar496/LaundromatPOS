@@ -1,4 +1,4 @@
-# Laundromat POS Flutter
+# WashPOS Flutter
 
 Flutter is now the primary implementation path for new features in this repo.
 

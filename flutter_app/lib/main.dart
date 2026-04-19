@@ -23,7 +23,7 @@ Future<void> main() async {
   await repository.initialize();
   final currentSession = await sessionStore.loadSession();
   runApp(
-    LaundromatPosApp(
+    WashPosApp(
       repository: repository,
       sessionStore: sessionStore,
       currentSession: currentSession,

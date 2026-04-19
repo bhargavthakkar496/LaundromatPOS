@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { query, withTransaction } from '../db/transaction.js';
 import { writeAuditLog } from '../services/audit.js';
+import { calculatePricingQuote } from '../services/pricing.service.js';
 import { generateReference } from '../services/security.js';
 import { serializeActiveOrderSession } from '../services/serializers.js';
 
@@ -342,23 +343,11 @@ export async function confirmActiveOrderSessionHandler(
       const customerId = customerResult.rows[0].id;
 
       const machineIds = buildMachineIds(current);
-      const machinePrices = await client.query<MachineRow>(
-        `
-          SELECT id, type, price
-          FROM machines
-          WHERE id = ANY($1::bigint[])
-        `,
-        [machineIds],
-      );
-
-      if (machinePrices.rowCount !== machineIds.length) {
-        throw new Error('Assigned machines not found');
-      }
-
-      const amount = machinePrices.rows.reduce(
-        (sum, row) => sum + Number(row.price),
-        0,
-      );
+      const quote = await calculatePricingQuote(client, {
+        machineIds,
+        selectedServices,
+      });
+      const amount = quote.finalTotal;
       const paymentReference = generateReference('ORD');
       const primaryMachine = primaryMachineId(current);
       if (primaryMachine == null) {

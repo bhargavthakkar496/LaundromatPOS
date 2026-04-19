@@ -1,4 +1,4 @@
-package com.example.laundromat_pos_flutter
+package com.example.washpos_flutter
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -7,9 +7,9 @@ import android.content.IntentFilter
 import android.os.Build
 
 object MachineIntegrationBroadcasts {
-    const val actionMachineEvent = "com.laundromat.pos.MACHINE_EVENT"
-    const val actionStartCycle = "com.laundromat.pos.MACHINE_START_CYCLE"
-    const val actionClearMachine = "com.laundromat.pos.MACHINE_CLEAR"
+    const val actionMachineEvent = "com.washpos.app.MACHINE_EVENT"
+    const val actionStartCycle = "com.washpos.app.MACHINE_START_CYCLE"
+    const val actionClearMachine = "com.washpos.app.MACHINE_CLEAR"
 
     const val extraMachineId = "machineId"
     const val extraType = "type"

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
 import '../data/pos_repository.dart';
+import '../models/inventory.dart';
+import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
 import '../services/app_routes.dart';
@@ -14,9 +16,13 @@ import '../widgets/manager_option_icon.dart';
 import 'customer_self_service_screen.dart';
 import 'customer_profile_screen.dart';
 import 'inventory_screen.dart';
+import 'maintenance_screen.dart';
 import 'machine_overview_screen.dart';
+import 'operator_payment_screen.dart';
 import 'order_management_screen.dart';
 import 'order_history_screen.dart';
+import 'pricing_screen.dart';
+import 'refund_requests_screen.dart';
 
 class MachineListScreen extends StatefulWidget {
   const MachineListScreen({
@@ -43,7 +49,12 @@ class _MachineListScreenState extends State<MachineListScreen> {
   final Map<int, String> _lastKnownStatusByMachineId = {};
   final Set<int> _autoNotifiedCompletionOrderIds = <int>{};
   List<Machine> _machines = const [];
+  List<InventoryRestockRequest> _pendingRestockRequests = const [];
+  List<InventoryRestockRequest> _approvedRestockRequests = const [];
   bool _loading = true;
+  bool _operatorMessageShown = false;
+  int? _approvingRestockRequestId;
+  int? _markingProcuredRestockRequestId;
 
   @override
   void initState() {
@@ -127,6 +138,35 @@ class _MachineListScreenState extends State<MachineListScreen> {
     });
   }
 
+  void _showOperatorFloatingMessage() {
+    if (_operatorMessageShown) {
+      return;
+    }
+    _operatorMessageShown = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          duration: const Duration(seconds: 4),
+          backgroundColor: const Color(0xFF0E7490),
+          content: Text(
+            'Store operator ready. Track machines, pickups, maintenance, and approvals from this dashboard.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+      );
+    });
+  }
+
   Future<void> _openMachines() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -147,7 +187,18 @@ class _MachineListScreenState extends State<MachineListScreen> {
       });
     }
 
-    final machines = await widget.repository.getMachines();
+    final results = await Future.wait([
+      widget.repository.getMachines(),
+      widget.repository.getInventoryRestockRequests(
+        status: InventoryRestockRequestStatus.pending,
+      ),
+      widget.repository.getInventoryRestockRequests(
+        status: InventoryRestockRequestStatus.approved,
+      ),
+    ]);
+    final machines = results[0] as List<Machine>;
+    final pendingRestockRequests = results[1] as List<InventoryRestockRequest>;
+    final approvedRestockRequests = results[2] as List<InventoryRestockRequest>;
     await _handleAutomaticCompletionNotifications(machines);
     for (final machine in machines) {
       _lastKnownStatusByMachineId[machine.id] = machine.status;
@@ -157,8 +208,120 @@ class _MachineListScreenState extends State<MachineListScreen> {
     }
     setState(() {
       _machines = machines;
+      _pendingRestockRequests = pendingRestockRequests;
+      _approvedRestockRequests = approvedRestockRequests;
       _loading = false;
     });
+    _showOperatorFloatingMessage();
+  }
+
+  Future<void> _approveRestockRequest(InventoryRestockRequest request) async {
+    final remarksController = TextEditingController();
+    final remarks = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Approve Restock Request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${request.itemName} • ${request.requestedQuantity} ${request.unit}',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: remarksController,
+                minLines: 3,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Operator remarks',
+                  hintText:
+                      'Approved for next supplier run and priority shelf replenishment.',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = remarksController.text.trim();
+                if (value.isEmpty) {
+                  return;
+                }
+                Navigator.of(context).pop(value);
+              },
+              child: const Text('Approve'),
+            ),
+          ],
+        );
+      },
+    );
+    remarksController.dispose();
+
+    if (!mounted || remarks == null || remarks.trim().isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _approvingRestockRequestId = request.id;
+    });
+
+    await widget.repository.approveInventoryRestockRequest(
+      requestId: request.id,
+      operatorRemarks: remarks,
+      approverName: widget.user.displayName,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _approvingRestockRequestId = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Restock request ${request.requestNumber} approved and moved into procurement.',
+        ),
+      ),
+    );
+    _loadMachines(showLoading: false);
+  }
+
+  Future<void> _markRestockRequestProcured(
+    InventoryRestockRequest request,
+  ) async {
+    setState(() {
+      _markingProcuredRestockRequestId = request.id;
+    });
+
+    try {
+      await widget.repository.markInventoryRestockRequestProcured(
+        requestId: request.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Restock request ${request.requestNumber} marked procured. Inventory is healthy again.',
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _markingProcuredRestockRequestId = null;
+        });
+      }
+    }
   }
 
   Future<void> _handleAutomaticCompletionNotifications(
@@ -232,8 +395,9 @@ class _MachineListScreenState extends State<MachineListScreen> {
     if (action.title == 'Payment') {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => CustomerSelfServiceScreen(
+          builder: (_) => OperatorPaymentScreen(
             repository: widget.repository,
+            user: widget.user,
           ),
         ),
       );
@@ -244,15 +408,37 @@ class _MachineListScreenState extends State<MachineListScreen> {
     if (action.title == 'Inventory') {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const InventoryScreen(),
+          builder: (_) => InventoryScreen(repository: widget.repository),
         ),
       );
+      _loadMachines(showLoading: false);
       return;
     }
 
-    if (action.title == 'Orders' ||
-        action.title == 'Reports' ||
-        action.title == 'Complaint Refund') {
+    if (action.title == 'Pricing') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PricingScreen(repository: widget.repository),
+        ),
+      );
+      _loadMachines(showLoading: false);
+      return;
+    }
+
+    if (action.title == 'Maintenance') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MaintenanceScreen(
+            repository: widget.repository,
+            user: widget.user,
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
+      return;
+    }
+
+    if (action.title == 'Orders' || action.title == 'Reports') {
       if (action.title == 'Orders') {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -266,6 +452,19 @@ class _MachineListScreenState extends State<MachineListScreen> {
         return;
       }
       await _openHistory();
+      return;
+    }
+
+    if (action.title == 'Complaint Refund') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => RefundRequestsScreen(
+            repository: widget.repository,
+            user: widget.user,
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
       return;
     }
 
@@ -300,7 +499,8 @@ class _MachineListScreenState extends State<MachineListScreen> {
       _ManagerAction(
         title: 'Payment',
         shortTitle: 'Payment',
-        description: 'Review active payment methods and settlement readiness.',
+        description:
+            'Run operator checkout, search past payments, and create refund requests.',
         iconType: ManagerOptionIconType.payment,
       ),
       _ManagerAction(
@@ -350,7 +550,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
         title: 'Complaint Refund',
         shortTitle: 'Refunds',
         description:
-            'Handle complaints, refunds, and customer recovery actions.',
+            'Review queued refund requests and process approved refunds.',
         iconType: ManagerOptionIconType.complaintRefund,
       ),
     ];
@@ -370,7 +570,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Welcome, ${widget.user.displayName}'),
         actions: [
           TextButton(
             onPressed: _openHistory,
@@ -468,6 +667,252 @@ class _MachineListScreenState extends State<MachineListScreen> {
                   ),
                 ),
                 const SizedBox(height: 28),
+                if (_pendingRestockRequests.isNotEmpty) ...[
+                  Text(
+                    'Restock Requests',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Inventory-generated restock orders appear here for operator approval and remarks before purchasing picks them up.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF4B6475),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  ..._pendingRestockRequests.map(
+                    (request) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          request.itemName,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD78B2E)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      'Pending Approval',
+                                      style: TextStyle(
+                                        color: Color(0xFFD78B2E),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
+                                children: [
+                                  _RequestMeta(
+                                    label: 'Requested Qty',
+                                    value:
+                                        '${request.requestedQuantity} ${request.unit}',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Supplier',
+                                    value: request.supplier ?? 'Unassigned',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Branch / Location',
+                                    value:
+                                        '${request.branch} / ${request.location}',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Requested By',
+                                    value: request.requestedByName ?? 'System',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Created',
+                                    value: MaterialLocalizations.of(context)
+                                        .formatShortDate(request.createdAt),
+                                  ),
+                                ],
+                              ),
+                              if (request.requestNotes != null &&
+                                  request.requestNotes!.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Request note: ${request.requestNotes!}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                onPressed:
+                                    _approvingRestockRequestId == request.id
+                                        ? null
+                                        : () => _approveRestockRequest(request),
+                                icon: const Icon(Icons.approval_outlined),
+                                label: Text(
+                                  _approvingRestockRequestId == request.id
+                                      ? 'Approving...'
+                                      : 'Approve With Remarks',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                ],
+                if (_approvedRestockRequests.isNotEmpty) ...[
+                  Text(
+                    'In Procurement',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'These inventory orders were approved on the operator screen and are now waiting to be marked as procured once stock arrives.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF4B6475),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  ..._approvedRestockRequests.map(
+                    (request) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          request.itemName,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1E7C93)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      'In Procurement',
+                                      style: TextStyle(
+                                        color: Color(0xFF1E7C93),
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 12,
+                                runSpacing: 8,
+                                children: [
+                                  _RequestMeta(
+                                    label: 'Approved Qty',
+                                    value:
+                                        '${request.requestedQuantity} ${request.unit}',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Supplier',
+                                    value: request.supplier ?? 'Unassigned',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Branch / Location',
+                                    value:
+                                        '${request.branch} / ${request.location}',
+                                  ),
+                                  _RequestMeta(
+                                    label: 'Approved By',
+                                    value: request.approvedByName ??
+                                        widget.user.displayName,
+                                  ),
+                                ],
+                              ),
+                              if ((request.operatorRemarks ?? '')
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Operator remarks: ${request.operatorRemarks!}',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                onPressed: _markingProcuredRestockRequestId ==
+                                        request.id
+                                    ? null
+                                    : () =>
+                                        _markRestockRequestProcured(request),
+                                icon: const Icon(Icons.inventory_2_outlined),
+                                label: Text(
+                                  _markingProcuredRestockRequestId == request.id
+                                      ? 'Updating Stock...'
+                                      : 'Mark Procured',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                ],
                 Text(
                   'Manager Options',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -555,35 +1000,35 @@ class _ManagerActionCard extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 68,
+                  height: 68,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF6FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   alignment: Alignment.center,
                   child: ManagerOptionIcon(
                     type: action.iconType,
-                    size: 24,
+                    size: 48,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 SizedBox(
-                  width: 84,
+                  width: 112,
                   child: Text(
                     action.shortTitle,
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     softWrap: false,
-                    overflow: TextOverflow.visible,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w700,
-                          height: 1.0,
+                          height: 1.1,
                           letterSpacing: 0,
                           color: const Color(0xFF223746),
                         ),
@@ -649,6 +1094,36 @@ class _SummaryPill extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestMeta extends StatelessWidget {
+  const _RequestMeta({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.titleSmall),
         ],
       ),
     );

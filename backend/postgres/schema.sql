@@ -141,6 +141,73 @@ CREATE TABLE IF NOT EXISTS payments (
   metadata JSONB NOT NULL DEFAULT '{}'::JSONB
 );
 
+CREATE TABLE IF NOT EXISTS refund_requests (
+  id BIGSERIAL PRIMARY KEY,
+  order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  requested_by_name TEXT,
+  processed_by_name TEXT,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS refund_requests_one_pending_per_order_idx
+  ON refund_requests(order_id)
+  WHERE status = 'PENDING';
+
+CREATE TABLE IF NOT EXISTS pricing_service_fees (
+  service_code TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS pricing_campaigns (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  discount_type TEXT NOT NULL,
+  discount_value NUMERIC(12,2) NOT NULL,
+  applies_to_service TEXT,
+  min_order_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  starts_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS pricing_campaigns_active_idx
+  ON pricing_campaigns(is_active, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS maintenance_records (
+  id BIGSERIAL PRIMARY KEY,
+  machine_id BIGINT NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+  issue_title TEXT NOT NULL,
+  issue_description TEXT,
+  priority TEXT NOT NULL DEFAULT 'MEDIUM',
+  status TEXT NOT NULL DEFAULT 'MARKED',
+  reported_by_name TEXT,
+  started_by_name TEXT,
+  completed_by_name TEXT,
+  reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  resolution_notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS maintenance_records_machine_idx
+  ON maintenance_records(machine_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS maintenance_records_status_idx
+  ON maintenance_records(status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS payment_sessions (
   id BIGSERIAL PRIMARY KEY,
   amount NUMERIC(12,2) NOT NULL,
@@ -189,6 +256,84 @@ CREATE TABLE IF NOT EXISTS active_order_sessions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS inventory_suppliers (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  contact_name TEXT,
+  phone TEXT,
+  email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_items (
+  id BIGSERIAL PRIMARY KEY,
+  sku TEXT NOT NULL UNIQUE,
+  barcode TEXT UNIQUE,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  unit TEXT NOT NULL,
+  unit_type TEXT NOT NULL DEFAULT 'PACKAGE',
+  pack_size TEXT,
+  quantity_on_hand INTEGER NOT NULL DEFAULT 0,
+  reorder_point INTEGER NOT NULL DEFAULT 0,
+  par_level INTEGER NOT NULL DEFAULT 0,
+  unit_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  selling_price NUMERIC(12,2),
+  supplier_id BIGINT REFERENCES inventory_suppliers(id),
+  branch_name TEXT NOT NULL,
+  location_name TEXT NOT NULL,
+  last_restocked_at TIMESTAMPTZ,
+  expires_at DATE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_stock_movements (
+  id BIGSERIAL PRIMARY KEY,
+  inventory_item_id BIGINT NOT NULL REFERENCES inventory_items(id),
+  movement_type TEXT NOT NULL,
+  quantity_delta INTEGER NOT NULL,
+  balance_after INTEGER NOT NULL,
+  reference_type TEXT,
+  reference_id TEXT,
+  notes TEXT,
+  performed_by_user_id BIGINT REFERENCES users(id),
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_purchase_orders (
+  id BIGSERIAL PRIMARY KEY,
+  po_number TEXT NOT NULL UNIQUE,
+  supplier_id BIGINT REFERENCES inventory_suppliers(id),
+  status TEXT NOT NULL,
+  branch_name TEXT NOT NULL,
+  expected_delivery_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_restock_requests (
+  id BIGSERIAL PRIMARY KEY,
+  request_number TEXT NOT NULL UNIQUE,
+  inventory_item_id BIGINT NOT NULL REFERENCES inventory_items(id),
+  requested_quantity INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  request_notes TEXT,
+  operator_remarks TEXT,
+  requested_by_user_id BIGINT REFERENCES users(id),
+  approved_by_user_id BIGINT REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  approved_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE inventory_purchase_orders
+  ADD COLUMN IF NOT EXISTS restock_request_id BIGINT REFERENCES inventory_restock_requests(id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS active_order_sessions_single_active_idx
 ON active_order_sessions ((is_active))
 WHERE is_active = TRUE;
@@ -230,6 +375,23 @@ CREATE INDEX IF NOT EXISTS orders_timestamp_idx ON orders(timestamp DESC);
 CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status);
 CREATE INDEX IF NOT EXISTS orders_payment_status_idx ON orders(payment_status);
 CREATE INDEX IF NOT EXISTS payments_order_id_idx ON payments(order_id);
+CREATE INDEX IF NOT EXISTS inventory_items_category_idx
+  ON inventory_items(category);
+CREATE INDEX IF NOT EXISTS inventory_items_supplier_id_idx
+  ON inventory_items(supplier_id);
+CREATE INDEX IF NOT EXISTS inventory_items_branch_location_idx
+  ON inventory_items(branch_name, location_name);
+CREATE INDEX IF NOT EXISTS inventory_items_quantity_idx
+  ON inventory_items(quantity_on_hand);
+CREATE INDEX IF NOT EXISTS inventory_stock_movements_item_time_idx
+  ON inventory_stock_movements(inventory_item_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS inventory_purchase_orders_status_idx
+  ON inventory_purchase_orders(status);
+CREATE INDEX IF NOT EXISTS inventory_restock_requests_status_idx
+  ON inventory_restock_requests(status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS inventory_purchase_orders_restock_request_idx
+  ON inventory_purchase_orders(restock_request_id)
+  WHERE restock_request_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS machine_reservations_machine_time_idx
   ON machine_reservations(machine_id, start_time, end_time);
 CREATE INDEX IF NOT EXISTS machine_events_machine_id_idx
@@ -253,5 +415,86 @@ VALUES
   (8, 'Dryer 05', 'Dryer', 12, 170.00, 'AVAILABLE'),
   (9, 'Dryer 06', 'Dryer', 15, 220.00, 'AVAILABLE')
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO inventory_suppliers (id, name, contact_name, phone, email)
+VALUES
+  (1, 'Sparkle Supply Co', 'Riya Menon', '9876500011', 'sparkle@example.com'),
+  (2, 'FreshFold Traders', 'Kunal Shah', '9876500012', 'freshfold@example.com'),
+  (3, 'CleanChem Distributors', 'Maya Iyer', '9876500013', 'cleanchem@example.com')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO inventory_items (
+  id,
+  sku,
+  barcode,
+  name,
+  category,
+  unit,
+  unit_type,
+  pack_size,
+  quantity_on_hand,
+  reorder_point,
+  par_level,
+  unit_cost,
+  selling_price,
+  supplier_id,
+  branch_name,
+  location_name,
+  last_restocked_at,
+  expires_at
+)
+VALUES
+  (1, 'DET-ULTRA-5KG', '8901001000011', 'Ultra Wash Powder', 'Detergent', 'bags', 'PACKAGE', '5 kg bag', 5, 8, 12, 410.00, 560.00, 1, 'Main Branch', 'Aisle A1', NOW() - INTERVAL '2 days', NULL),
+  (2, 'DET-ECO-4KG', '8901001000012', 'Eco Fresh Powder', 'Detergent', 'bags', 'PACKAGE', '4 kg bag', 14, 6, 10, 360.00, 495.00, 1, 'Main Branch', 'Aisle A1', NOW() - INTERVAL '8 days', NULL),
+  (3, 'SOAP-BAR-24', '8901001000013', 'Bar Soap Classic', 'Soap', 'bars', 'UNIT', '24-bar carton', 22, 10, 18, 28.00, 38.00, 2, 'Main Branch', 'Aisle B1', NOW() - INTERVAL '5 days', DATE '2026-06-14'),
+  (4, 'SOAP-HAND-12', '8901001000014', 'Hand Soap Backup', 'Soap', 'bars', 'UNIT', '12-bar sleeve', 4, 6, 10, 34.00, 48.00, 2, 'Main Branch', 'Aisle B2', NOW() - INTERVAL '11 days', DATE '2026-05-02'),
+  (5, 'LIQ-PRO-20L', '8901001000015', 'Liquid Wash Pro', 'Liquid', 'canisters', 'LIQUID_CONTAINER', '20 L canister', 9, 5, 8, 620.00, NULL, 1, 'Main Branch', 'Aisle C1', NOW() - INTERVAL '3 days', NULL),
+  (6, 'LIQ-EXP-20L', '8901001000016', 'Express Liquid', 'Liquid', 'canisters', 'LIQUID_CONTAINER', '20 L canister', 3, 5, 8, 590.00, NULL, 1, 'North Branch', 'Aisle C1', NOW() - INTERVAL '16 days', NULL),
+  (7, 'DIS-WIPE-5L', '8901001000017', 'Wipe Down Spray', 'Disinfectant', 'bottles', 'LIQUID_CONTAINER', '5 L bottle', 2, 4, 6, 180.00, NULL, 3, 'Main Branch', 'Aisle D1', NOW() - INTERVAL '12 days', DATE '2026-04-25'),
+  (8, 'DIS-DRUM-5L', '8901001000018', 'Drum Sanitizer', 'Disinfectant', 'bottles', 'LIQUID_CONTAINER', '5 L bottle', 6, 4, 6, 205.00, NULL, 3, 'North Branch', 'Aisle D2', NOW() - INTERVAL '6 days', DATE '2026-06-02'),
+  (9, 'BLE-WHITE-10L', '8901001000019', 'White Bright Bleach', 'Bleach', 'jugs', 'LIQUID_CONTAINER', '10 L jug', 10, 5, 8, 245.00, NULL, 3, 'Main Branch', 'Aisle E1', NOW() - INTERVAL '4 days', NULL),
+  (10, 'BLE-HEAVY-10L', '8901001000020', 'Heavy Duty Bleach', 'Bleach', 'jugs', 'LIQUID_CONTAINER', '10 L jug', 5, 6, 8, 265.00, NULL, 3, 'North Branch', 'Aisle E2', NOW() - INTERVAL '13 days', NULL),
+  (11, 'SOFT-LAV-5L', '8901001000021', 'Lavender Softener', 'Softener', 'pouches', 'PACKAGE', '5 L pouch', 13, 6, 10, 155.00, 220.00, 2, 'Main Branch', 'Aisle F1', NOW() - INTERVAL '7 days', DATE '2026-05-15'),
+  (12, 'SOFT-BABY-5L', '8901001000022', 'Baby Soft Mix', 'Softener', 'pouches', 'PACKAGE', '5 L pouch', 0, 4, 8, 165.00, 230.00, 2, 'North Branch', 'Aisle F2', NOW() - INTERVAL '19 days', DATE '2026-04-29')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO inventory_purchase_orders (
+  id,
+  po_number,
+  supplier_id,
+  status,
+  branch_name,
+  expected_delivery_at,
+  notes
+)
+VALUES
+  (1, 'PO-INV-1001', 1, 'PENDING', 'Main Branch', NOW() + INTERVAL '2 days', 'Detergent refill for premium wash line'),
+  (2, 'PO-INV-1002', 3, 'ORDERED', 'North Branch', NOW() + INTERVAL '3 days', 'Disinfectant and bleach restock'),
+  (3, 'PO-INV-1003', 2, 'RECEIVED', 'Main Branch', NOW() - INTERVAL '1 day', 'Softener replenishment')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO inventory_stock_movements (
+  inventory_item_id,
+  movement_type,
+  quantity_delta,
+  balance_after,
+  reference_type,
+  reference_id,
+  notes,
+  occurred_at
+)
+VALUES
+  (1, 'RECEIVED', 12, 12, 'PO', 'PO-INV-1001', 'Supplier delivery for premium detergent shelf.', NOW() - INTERVAL '8 days'),
+  (1, 'CONSUMED', -4, 8, 'SHIFT_USAGE', 'SHIFT-401', 'Washer bay daily detergent consumption.', NOW() - INTERVAL '5 days'),
+  (1, 'DAMAGED', -1, 7, 'INCIDENT', 'INC-DET-01', 'One bag torn during unloading.', NOW() - INTERVAL '4 days'),
+  (1, 'CONSUMED', -2, 5, 'SHIFT_USAGE', 'SHIFT-404', 'Consumed during express wash cycle run.', NOW() - INTERVAL '2 days'),
+  (2, 'RECEIVED', 20, 20, 'PO', 'PO-INV-1004', 'Bulk detergent top-up from Sparkle Supply Co.', NOW() - INTERVAL '14 days'),
+  (2, 'TRANSFERRED', -4, 16, 'TRANSFER', 'TRN-DET-22', 'Moved cartons to branch floor stock.', NOW() - INTERVAL '10 days'),
+  (2, 'CONSUMED', -2, 14, 'SHIFT_USAGE', 'SHIFT-395', 'Routine stock issue to wash line.', NOW() - INTERVAL '8 days'),
+  (7, 'RECEIVED', 6, 6, 'PO', 'PO-INV-1002', 'Disinfectant delivery received.', NOW() - INTERVAL '15 days'),
+  (7, 'CONSUMED', -3, 3, 'SHIFT_USAGE', 'SHIFT-399', 'Sanitizing drum-clean cycle stock issue.', NOW() - INTERVAL '11 days'),
+  (7, 'DAMAGED', -1, 2, 'INCIDENT', 'INC-DIS-03', 'Bottle leak found during shelf check.', NOW() - INTERVAL '9 days'),
+  (12, 'MANUAL_CORRECTION', -2, 2, 'AUDIT', 'AUD-2201', 'Physical count corrected after audit variance.', NOW() - INTERVAL '21 days'),
+  (12, 'CONSUMED', -2, 0, 'SHIFT_USAGE', 'SHIFT-388', 'Softener pouch stock fully consumed.', NOW() - INTERVAL '19 days');
 
 COMMIT;

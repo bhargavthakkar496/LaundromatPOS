@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.customer
+package com.washpos.app.ui.customer
 
 data class CustomerDisplayState(
     val amountLabel: String = "Amount: INR 0",

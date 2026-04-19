@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.laundromat.pos"
+    namespace = "com.washpos.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.laundromat.pos"
+        applicationId = "com.washpos.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

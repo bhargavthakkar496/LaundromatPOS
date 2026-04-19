@@ -2,12 +2,16 @@ import '../models/active_order_session.dart';
 import '../models/auth_session.dart';
 import '../models/customer.dart';
 import '../models/customer_profile.dart';
+import '../models/inventory.dart';
+import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/machine_reservation.dart';
 import '../models/order.dart';
 import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
 import '../models/pos_user.dart';
+import '../models/pricing.dart';
+import '../models/refund_request.dart';
 import '../models/reservation_history_item.dart';
 
 PosUser decodePosUser(Map<String, dynamic> json) {
@@ -52,7 +56,150 @@ Customer decodeCustomer(Map<String, dynamic> json) {
     phone: json['phone'] as String,
     preferredWasherSizeKg: json['preferredWasherSizeKg'] as int?,
     preferredDetergentAddOn: json['preferredDetergentAddOn'] as String?,
-    preferredDryerDurationMinutes: json['preferredDryerDurationMinutes'] as int?,
+    preferredDryerDurationMinutes:
+        json['preferredDryerDurationMinutes'] as int?,
+  );
+}
+
+InventoryDashboard decodeInventoryDashboard(Map<String, dynamic> json) {
+  return InventoryDashboard(
+    metrics: InventoryDashboardMetrics(
+      lowStockCount: json['metrics']['lowStockCount'] as int,
+      outOfStockCount: json['metrics']['outOfStockCount'] as int,
+      stockValue: (json['metrics']['stockValue'] as num).toDouble(),
+      pendingPurchaseOrders: json['metrics']['pendingPurchaseOrders'] as int,
+      expiringSoonCount: json['metrics']['expiringSoonCount'] as int,
+    ),
+    categories: (json['categories'] as List<dynamic>? ?? const [])
+        .map(
+          (item) => InventoryCategorySummary(
+            category: item['category'] as String,
+            itemCount: item['itemCount'] as int,
+            lowStockCount: item['lowStockCount'] as int,
+            outOfStockCount: item['outOfStockCount'] as int,
+          ),
+        )
+        .toList(),
+    suppliers: (json['suppliers'] as List<dynamic>? ?? const [])
+        .map((item) => item as String)
+        .toList(),
+    branches: (json['branches'] as List<dynamic>? ?? const [])
+        .map((item) => item as String)
+        .toList(),
+    locations: (json['locations'] as List<dynamic>? ?? const [])
+        .map((item) => item as String)
+        .toList(),
+  );
+}
+
+InventoryItem decodeInventoryItem(Map<String, dynamic> json) {
+  return InventoryItem(
+    id: json['id'] as int,
+    sku: json['sku'] as String,
+    barcode: json['barcode'] as String?,
+    name: json['name'] as String,
+    category: json['category'] as String,
+    supplier: json['supplier'] as String?,
+    branch: json['branch'] as String,
+    location: json['location'] as String,
+    unit: json['unit'] as String,
+    unitType: json['unitType'] as String,
+    packSize: json['packSize'] as String?,
+    quantityOnHand: json['quantityOnHand'] as int,
+    reorderPoint: json['reorderPoint'] as int,
+    parLevel: json['parLevel'] as int,
+    unitCost: (json['unitCost'] as num).toDouble(),
+    sellingPrice: json['sellingPrice'] == null
+        ? null
+        : (json['sellingPrice'] as num).toDouble(),
+    stockValue: (json['stockValue'] as num).toDouble(),
+    lastRestockedAt: json['lastRestockedAt'] == null
+        ? null
+        : DateTime.parse(json['lastRestockedAt'] as String),
+    expiresAt: json['expiresAt'] == null
+        ? null
+        : DateTime.parse(json['expiresAt'] as String),
+    stockStatus: json['stockStatus'] as String,
+    isActive: json['isActive'] as bool,
+    reorderUrgencyScore: json['reorderUrgencyScore'] as int,
+    activeRestockRequestId: json['activeRestockRequestId'] as int?,
+    activeRestockRequestStatus: json['activeRestockRequestStatus'] as String?,
+    activeRestockRequestNumber: json['activeRestockRequestNumber'] as String?,
+    activeRestockRequestedQuantity:
+        json['activeRestockRequestedQuantity'] as int?,
+    activeRestockOperatorRemarks:
+        json['activeRestockOperatorRemarks'] as String?,
+    activeRestockApprovedAt: json['activeRestockApprovedAt'] == null
+        ? null
+        : DateTime.parse(json['activeRestockApprovedAt'] as String),
+  );
+}
+
+InventoryStockMovement decodeInventoryStockMovement(
+  Map<String, dynamic> json,
+) {
+  return InventoryStockMovement(
+    id: json['id'] as int,
+    inventoryItemId: json['inventoryItemId'] as int,
+    movementType: json['movementType'] as String,
+    quantityDelta: json['quantityDelta'] as int,
+    balanceAfter: json['balanceAfter'] as int,
+    referenceType: json['referenceType'] as String?,
+    referenceId: json['referenceId'] as String?,
+    notes: json['notes'] as String?,
+    performedByName: json['performedByName'] as String?,
+    occurredAt: DateTime.parse(json['occurredAt'] as String),
+  );
+}
+
+InventoryRestockRequest decodeInventoryRestockRequest(
+  Map<String, dynamic> json,
+) {
+  return InventoryRestockRequest(
+    id: json['id'] as int,
+    requestNumber: json['requestNumber'] as String,
+    inventoryItemId: json['inventoryItemId'] as int,
+    itemName: json['itemName'] as String,
+    itemSku: json['itemSku'] as String,
+    itemCategory: json['itemCategory'] as String,
+    supplier: json['supplier'] as String?,
+    branch: json['branch'] as String,
+    location: json['location'] as String,
+    unit: json['unit'] as String,
+    requestedQuantity: json['requestedQuantity'] as int,
+    status: json['status'] as String,
+    requestNotes: json['requestNotes'] as String?,
+    operatorRemarks: json['operatorRemarks'] as String?,
+    requestedByName: json['requestedByName'] as String?,
+    approvedByName: json['approvedByName'] as String?,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    approvedAt: json['approvedAt'] == null
+        ? null
+        : DateTime.parse(json['approvedAt'] as String),
+  );
+}
+
+MaintenanceRecord decodeMaintenanceRecord(Map<String, dynamic> json) {
+  return MaintenanceRecord(
+    id: json['id'] as int,
+    machineId: json['machineId'] as int,
+    issueTitle: json['issueTitle'] as String,
+    issueDescription: json['issueDescription'] as String?,
+    priority: json['priority'] as String,
+    status: json['status'] as String,
+    reportedByName: json['reportedByName'] as String?,
+    startedByName: json['startedByName'] as String?,
+    completedByName: json['completedByName'] as String?,
+    reportedAt: DateTime.parse(json['reportedAt'] as String),
+    startedAt: json['startedAt'] == null
+        ? null
+        : DateTime.parse(json['startedAt'] as String),
+    completedAt: json['completedAt'] == null
+        ? null
+        : DateTime.parse(json['completedAt'] as String),
+    resolutionNotes: json['resolutionNotes'] as String?,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    updatedAt: DateTime.parse(json['updatedAt'] as String),
   );
 }
 
@@ -137,7 +284,8 @@ ReservationHistoryItem decodeReservationHistoryItem(Map<String, dynamic> json) {
 }
 
 CustomerProfile decodeCustomerProfile(Map<String, dynamic> json) {
-  final favoriteMachinesRaw = json['favoriteMachines'] as List<dynamic>? ?? const [];
+  final favoriteMachinesRaw =
+      json['favoriteMachines'] as List<dynamic>? ?? const [];
   return CustomerProfile(
     customer: decodeCustomer(json['customer'] as Map<String, dynamic>),
     orders: (json['orders'] as List<dynamic>? ?? const [])
@@ -155,11 +303,13 @@ CustomerProfile decodeCustomerProfile(Map<String, dynamic> json) {
           ),
         )
         .toList(),
-    upcomingReservations: (json['upcomingReservations'] as List<dynamic>? ?? const [])
-        .map(
-          (item) => decodeReservationHistoryItem(item as Map<String, dynamic>),
-        )
-        .toList(),
+    upcomingReservations:
+        (json['upcomingReservations'] as List<dynamic>? ?? const [])
+            .map(
+              (item) =>
+                  decodeReservationHistoryItem(item as Map<String, dynamic>),
+            )
+            .toList(),
   );
 }
 
@@ -175,6 +325,79 @@ PaymentSession decodePaymentSession(Map<String, dynamic> json) {
     createdAt: DateTime.parse(json['createdAt'] as String),
     checkedAt: DateTime.parse(json['checkedAt'] as String),
     failureReason: json['failureReason'] as String?,
+  );
+}
+
+RefundRequest decodeRefundRequest(Map<String, dynamic> json) {
+  return RefundRequest(
+    id: json['id'] as int,
+    orderId: json['orderId'] as int,
+    customerName: json['customerName'] as String,
+    customerPhone: json['customerPhone'] as String,
+    machineName: json['machineName'] as String,
+    amount: (json['amount'] as num).toDouble(),
+    paymentMethod: json['paymentMethod'] as String,
+    paymentReference: json['paymentReference'] as String,
+    reason: json['reason'] as String,
+    status: json['status'] as String,
+    requestedAt: DateTime.parse(json['requestedAt'] as String),
+    requestedByName: json['requestedByName'] as String?,
+    processedAt: json['processedAt'] == null
+        ? null
+        : DateTime.parse(json['processedAt'] as String),
+    processedByName: json['processedByName'] as String?,
+  );
+}
+
+PricingServiceFee decodePricingServiceFee(Map<String, dynamic> json) {
+  return PricingServiceFee(
+    serviceCode: json['serviceCode'] as String,
+    displayName: json['displayName'] as String,
+    amount: (json['amount'] as num).toDouble(),
+    isEnabled: json['isEnabled'] as bool,
+    updatedAt: DateTime.parse(json['updatedAt'] as String),
+  );
+}
+
+PricingCampaign decodePricingCampaign(Map<String, dynamic> json) {
+  return PricingCampaign(
+    id: json['id'] as int,
+    name: json['name'] as String,
+    description: json['description'] as String?,
+    discountType: json['discountType'] as String,
+    discountValue: (json['discountValue'] as num).toDouble(),
+    appliesToService: json['appliesToService'] as String?,
+    minOrderAmount: (json['minOrderAmount'] as num).toDouble(),
+    isActive: json['isActive'] as bool,
+    startsAt: json['startsAt'] == null
+        ? null
+        : DateTime.parse(json['startsAt'] as String),
+    endsAt: json['endsAt'] == null
+        ? null
+        : DateTime.parse(json['endsAt'] as String),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    updatedAt: DateTime.parse(json['updatedAt'] as String),
+  );
+}
+
+PricingQuote decodePricingQuote(Map<String, dynamic> json) {
+  return PricingQuote(
+    machineSubtotal: (json['machineSubtotal'] as num).toDouble(),
+    serviceFeeTotal: (json['serviceFeeTotal'] as num).toDouble(),
+    discountTotal: (json['discountTotal'] as num).toDouble(),
+    finalTotal: (json['finalTotal'] as num).toDouble(),
+    appliedCampaigns: (json['appliedCampaigns'] as List<dynamic>? ?? const [])
+        .map((item) => decodePricingCampaign(item as Map<String, dynamic>))
+        .toList(),
+    lines: (json['lines'] as List<dynamic>? ?? const [])
+        .map(
+          (item) => PricingQuoteLine(
+            label: item['label'] as String,
+            type: item['type'] as String,
+            amount: (item['amount'] as num).toDouble(),
+          ),
+        )
+        .toList(),
   );
 }
 

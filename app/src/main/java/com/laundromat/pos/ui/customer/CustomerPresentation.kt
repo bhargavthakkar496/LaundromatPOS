@@ -1,12 +1,12 @@
 
-package com.laundromat.pos.ui.customer
+package com.washpos.app.ui.customer
 
 import android.app.Presentation
 import android.content.Context
 import android.os.Bundle
 import android.view.Display
 import android.widget.TextView
-import com.laundromat.pos.R
+import com.washpos.app.R
 
 class CustomerPresentation(context: Context, display: Display) : Presentation(context, display) {
     private var amountView: TextView? = null

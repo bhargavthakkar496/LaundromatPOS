@@ -11,9 +11,9 @@ class SunmiMachineIntegrationService implements MachineIntegrationService {
   }) : _fallback = fallback;
 
   static const MethodChannel _methodChannel =
-      MethodChannel('laundromat_pos/machine_integration');
+      MethodChannel('washpos/machine_integration');
   static const EventChannel _eventChannel =
-      EventChannel('laundromat_pos/machine_integration/events');
+      EventChannel('washpos/machine_integration/events');
 
   final MachineIntegrationService _fallback;
   final StreamController<MachineIntegrationEvent> _controller =

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { query, withTransaction } from '../db/transaction.js';
 import { writeAuditLog } from '../services/audit.js';
+import { calculatePricingQuote } from '../services/pricing.service.js';
 import { generateReference } from '../services/security.js';
 import {
   serializeCustomer,
@@ -355,6 +356,17 @@ export async function createPaidOrderHandler(
         generateReference(parsed.data.referencePrefix ?? 'POS');
       const createdByUserId = parsed.data.createdByUserId ?? authUserId ?? null;
 
+      const quote = await calculatePricingQuote(client, {
+        machineIds: [machine.id],
+        selectedServices: [
+          machine.type == 'Dryer'
+            ? 'Drying'
+            : machine.type == 'Ironing Station'
+              ? 'Ironing'
+              : 'Washing',
+        ],
+      });
+
       const insertedOrder = await client.query<OrderRow>(
         `
           INSERT INTO orders (
@@ -384,7 +396,7 @@ export async function createPaidOrderHandler(
           createdByUserId,
           machine.type.toUpperCase(),
           [machine.type == 'Dryer' ? 'Drying' : machine.type == 'Ironing Station' ? 'Ironing' : 'Washing'],
-          Number(machine.price),
+          quote.finalTotal,
           parsed.data.paymentMethod,
           paymentReference,
           machine.capacity_kg,
@@ -544,10 +556,11 @@ export async function createManualOrderHandler(
       const createdByUserId = parsed.data.createdByUserId ?? authUserId ?? null;
       const paymentStatus =
         parsed.data.orderStatus === 'BOOKED' ? 'PENDING' : 'PAID';
-      const totalAmount = machineResults.rows.reduce(
-        (sum, machine) => sum + Number(machine.price),
-        0,
-      );
+      const quote = await calculatePricingQuote(client, {
+        machineIds,
+        selectedServices: parsed.data.selectedServices,
+      });
+      const totalAmount = quote.finalTotal;
       const primaryMachine = primaryMachineId(parsed.data);
       if (primaryMachine == null) {
         throw new Error('At least one service machine assignment is required');

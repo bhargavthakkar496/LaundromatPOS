@@ -1,8 +1,8 @@
 
-package com.laundromat.pos.data.db
+package com.washpos.app.data.db
 import android.content.Context
 import androidx.room.*
-import com.laundromat.pos.data.model.*
+import com.washpos.app.data.model.*
 
 @Database(
     entities = [
@@ -28,7 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "laundromat.db"
+                    "washpos.db"
                 )
                     .fallbackToDestructiveMigration()
                     .build()

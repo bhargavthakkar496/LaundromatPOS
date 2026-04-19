@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.common
+package com.washpos.app.ui.common
 
 import android.os.Handler
 import android.os.Looper

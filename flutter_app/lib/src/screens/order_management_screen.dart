@@ -68,8 +68,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   bool get _includesWashing =>
       _selectedServices.contains(LaundryService.washing);
 
-  bool get _includesDrying =>
-      _selectedServices.contains(LaundryService.drying);
+  bool get _includesDrying => _selectedServices.contains(LaundryService.drying);
 
   bool get _includesIroning =>
       _selectedServices.contains(LaundryService.ironing);
@@ -289,7 +288,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
               width: width,
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap: _saving ? null : () => _toggleService(service, !selected),
+                onTap:
+                    _saving ? null : () => _toggleService(service, !selected),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.all(18),
@@ -929,15 +929,20 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           },
                   ),
                   const SizedBox(height: 20),
-                  _buildDraftSummaryCard(),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: _buildDraftSummaryCard(),
+                    ),
+                  ),
                   const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: _saving ? null : _submitOrderDraft,
-                    icon: const Icon(Icons.upload_file_outlined),
-                    label: Text(
-                      _saving
-                          ? 'Sending to customer...'
-                          : 'Build Order And Show On Both Screens',
+                  Center(
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _submitOrderDraft,
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: Text(
+                        _saving ? 'Preparing checkout...' : 'Order Checkout',
+                      ),
                     ),
                   ),
                 ],

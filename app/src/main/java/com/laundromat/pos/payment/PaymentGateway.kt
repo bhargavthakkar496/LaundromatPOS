@@ -1,7 +1,7 @@
-package com.laundromat.pos.payment
+package com.washpos.app.payment
 
-import com.laundromat.pos.data.model.PaymentStatus
-import com.laundromat.pos.data.model.PaymentTransaction
+import com.washpos.app.data.model.PaymentStatus
+import com.washpos.app.data.model.PaymentTransaction
 
 interface PaymentGateway {
     fun createPaymentIntent(

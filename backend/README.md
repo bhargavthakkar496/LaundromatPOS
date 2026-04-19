@@ -33,6 +33,8 @@ cd backend/service
 npm run test:integration
 ```
 
+Before running the service or integration tests against an existing local database, apply any new files in `postgres/migrations` to the database referenced by `backend/service/.env`.
+
 And the Flutter app has an opt-in backend smoke test:
 
 ```bash

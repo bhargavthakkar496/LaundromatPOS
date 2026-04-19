@@ -1,6 +1,6 @@
 {
-    "name": "laundromat_pos_flutter",
-    "short_name": "laundromat_pos_flutter",
+    "name": "washpos_flutter",
+    "short_name": "washpos_flutter",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

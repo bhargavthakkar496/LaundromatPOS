@@ -1,4 +1,4 @@
-package com.example.laundromat_pos_flutter
+package com.example.washpos_flutter
 
 import android.content.BroadcastReceiver
 import android.content.Context

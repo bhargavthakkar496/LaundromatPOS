@@ -1,6 +1,6 @@
 
-# Laundromat POS – SUNMI D3 PRO
-Laundromat POS is a dual-screen laundry point-of-sale demo focused on operator checkout, customer self-service, and machine lifecycle visibility.
+# WashPOS – SUNMI D3 PRO
+WashPOS is a dual-screen laundry point-of-sale demo focused on operator checkout, customer self-service, and machine lifecycle visibility.
 
 - Main screen: operator workflow, machine operations, orders, and customer lookup
 - Customer screen (10.1"): confirmation, payment, and live order visibility

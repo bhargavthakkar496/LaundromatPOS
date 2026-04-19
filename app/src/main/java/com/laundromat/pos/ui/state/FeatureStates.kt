@@ -1,12 +1,12 @@
-package com.laundromat.pos.ui.state
+package com.washpos.app.ui.state
 
-import com.laundromat.pos.data.model.Customer
-import com.laundromat.pos.data.model.DashboardSummary
-import com.laundromat.pos.data.model.InventoryItem
-import com.laundromat.pos.data.model.Machine
-import com.laundromat.pos.data.model.OrderWithDetails
-import com.laundromat.pos.data.model.PaymentMethodTotal
-import com.laundromat.pos.data.model.PosUser
+import com.washpos.app.data.model.Customer
+import com.washpos.app.data.model.DashboardSummary
+import com.washpos.app.data.model.InventoryItem
+import com.washpos.app.data.model.Machine
+import com.washpos.app.data.model.OrderWithDetails
+import com.washpos.app.data.model.PaymentMethodTotal
+import com.washpos.app.data.model.PosUser
 
 data class LoginUiState(
     val username: String = "",

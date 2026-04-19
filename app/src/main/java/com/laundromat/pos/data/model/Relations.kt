@@ -1,4 +1,4 @@
-package com.laundromat.pos.data.model
+package com.washpos.app.data.model
 
 import androidx.room.Embedded
 import androidx.room.Relation

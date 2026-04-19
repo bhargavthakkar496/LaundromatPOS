@@ -14,6 +14,11 @@ npm install
 npm run dev
 ```
 
+If `PORT` is already occupied during `npm run dev`, the service now behaves safely:
+
+- If another WashPOS instance is already running on that port, the new process exits cleanly instead of crashing.
+- If some other process owns the port, the dev server automatically moves to the next available port and logs the chosen value.
+
 ## Current structure
 
 - `src/app.ts`

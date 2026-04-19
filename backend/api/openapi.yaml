@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Laundromat POS Backend API
+  title: WashPOS Backend API
   version: 0.1.0
   description: >
     Backend contract matching the current Flutter BackendPosRepository.
@@ -12,6 +12,9 @@ tags:
   - name: Auth
   - name: Machines
   - name: Customers
+  - name: Inventory
+  - name: Maintenance
+  - name: Pricing
   - name: Orders
   - name: Payments
   - name: Reservations
@@ -35,13 +38,13 @@ paths:
                 pin:
                   type: string
       responses:
-        '200':
+        "200":
           description: Authenticated session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthSession'
-        '401':
+                $ref: "#/components/schemas/AuthSession"
+        "401":
           description: Invalid credentials
   /machines:
     get:
@@ -52,30 +55,30 @@ paths:
           name: status
           required: false
           schema:
-            $ref: '#/components/schemas/MachineStatus'
+            $ref: "#/components/schemas/MachineStatus"
       responses:
-        '200':
+        "200":
           description: Machine list
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Machine'
+                  $ref: "#/components/schemas/Machine"
   /machines/{machineId}:
     get:
       tags: [Machines]
       summary: Get a single machine
       parameters:
-        - $ref: '#/components/parameters/MachineId'
+        - $ref: "#/components/parameters/MachineId"
       responses:
-        '200':
+        "200":
           description: Machine
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Machine'
-        '404':
+                $ref: "#/components/schemas/Machine"
+        "404":
           description: Machine not found
   /machines/reservable:
     get:
@@ -100,27 +103,27 @@ paths:
             type: string
             format: date-time
       responses:
-        '200':
+        "200":
           description: Reservable machines
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Machine'
+                  $ref: "#/components/schemas/Machine"
   /machines/{machineId}/pickup:
     post:
       tags: [Machines]
       summary: Mark a machine order as picked up and clear assignment
       parameters:
-        - $ref: '#/components/parameters/MachineId'
+        - $ref: "#/components/parameters/MachineId"
       responses:
-        '200':
+        "200":
           description: Updated machine
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Machine'
+                $ref: "#/components/schemas/Machine"
   /customers/by-phone:
     get:
       tags: [Customers]
@@ -132,13 +135,13 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Customer found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Customer'
-        '404':
+                $ref: "#/components/schemas/Customer"
+        "404":
           description: Customer not found
   /customers/walk-in:
     post:
@@ -149,14 +152,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SaveWalkInCustomerRequest'
+              $ref: "#/components/schemas/SaveWalkInCustomerRequest"
       responses:
-        '200':
+        "200":
           description: Customer saved
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Customer'
+                $ref: "#/components/schemas/Customer"
   /customers/profile:
     get:
       tags: [Customers]
@@ -168,41 +171,417 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Customer profile
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerProfile'
-        '404':
+                $ref: "#/components/schemas/CustomerProfile"
+        "404":
           description: Customer not found
+  /inventory/dashboard:
+    get:
+      tags: [Inventory]
+      summary: Get inventory dashboard metrics, category summaries, and filter options
+      responses:
+        "200":
+          description: Inventory dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryDashboard"
+  /inventory/items:
+    get:
+      tags: [Inventory]
+      summary: List inventory items with search, filters, and sorting
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: stockStatus
+          required: false
+          schema:
+            $ref: "#/components/schemas/InventoryStockStatus"
+        - in: query
+          name: supplier
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: branch
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: location
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          required: false
+          schema:
+            type: string
+            enum: [quantity, lastRestockedAt, reorderUrgency]
+        - in: query
+          name: sortOrder
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Filtered inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+  /inventory/restock-requests:
+    get:
+      tags: [Inventory]
+      summary: List inventory restock requests
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: "#/components/schemas/InventoryRestockRequestStatus"
+      responses:
+        "200":
+          description: Restock request list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryRestockRequest"
+    post:
+      tags: [Inventory]
+      summary: Create a restock request for an inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryRestockRequest"
+      responses:
+        "201":
+          description: Restock request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRestockRequest"
+        "404":
+          description: Inventory item not found
+        "409":
+          description: Item is not eligible or already has a pending request
+  /inventory/restock-requests/{restockRequestId}/approve:
+    post:
+      tags: [Inventory]
+      summary: Approve a pending inventory restock request with operator remarks
+      parameters:
+        - in: path
+          name: restockRequestId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveInventoryRestockRequest"
+      responses:
+        "200":
+          description: Restock request approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryRestockRequest"
+        "404":
+          description: Restock request not found
+        "409":
+          description: Restock request already processed
+  /maintenance/eligible-machines:
+    get:
+      tags: [Maintenance]
+      summary: List machines that can be marked for maintenance
+      responses:
+        "200":
+          description: Available devices eligible for maintenance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Machine"
+  /maintenance/records:
+    get:
+      tags: [Maintenance]
+      summary: List maintenance records
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: "#/components/schemas/MaintenanceStatus"
+      responses:
+        "200":
+          description: Maintenance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaintenanceRecord"
+    post:
+      tags: [Maintenance]
+      summary: Create a maintenance record and move the device into maintenance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMaintenanceRecordRequest"
+      responses:
+        "201":
+          description: Maintenance record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceRecord"
+        "400":
+          description: Invalid request or machine not eligible
+        "404":
+          description: Machine not found
+  /maintenance/records/{recordId}/start:
+    post:
+      tags: [Maintenance]
+      summary: Start work on a marked maintenance record
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartMaintenanceRecordRequest"
+      responses:
+        "200":
+          description: Maintenance record moved to in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceRecord"
+        "404":
+          description: Maintenance record not found
+  /maintenance/records/{recordId}/complete:
+    post:
+      tags: [Maintenance]
+      summary: Complete maintenance and return the device to available service
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteMaintenanceRecordRequest"
+      responses:
+        "200":
+          description: Maintenance completed and device restored to service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceRecord"
+        "404":
+          description: Maintenance record not found
+  /pricing/service-fees:
+    get:
+      tags: [Pricing]
+      summary: List service-level pricing fees
+      responses:
+        "200":
+          description: Service fee list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PricingServiceFee"
+  /pricing/service-fees/{serviceCode}:
+    patch:
+      tags: [Pricing]
+      summary: Update a pricing service fee
+      parameters:
+        - in: path
+          name: serviceCode
+          required: true
+          schema:
+            type: string
+            enum: [Washing, Drying, Ironing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, isEnabled]
+              properties:
+                amount:
+                  type: number
+                isEnabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated service fee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingServiceFee"
+  /pricing/campaigns:
+    get:
+      tags: [Pricing]
+      summary: List pricing campaigns
+      parameters:
+        - in: query
+          name: activeOnly
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Campaign list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PricingCampaign"
+    post:
+      tags: [Pricing]
+      summary: Create a pricing campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePricingCampaignRequest"
+      responses:
+        "201":
+          description: Created campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingCampaign"
+  /pricing/campaigns/{campaignId}:
+    patch:
+      tags: [Pricing]
+      summary: Update a pricing campaign
+      parameters:
+        - in: path
+          name: campaignId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePricingCampaignRequest"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingCampaign"
+  /pricing/machines/{machineId}:
+    patch:
+      tags: [Pricing]
+      summary: Update one machine base rate
+      parameters:
+        - $ref: "#/components/parameters/MachineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price]
+              properties:
+                price:
+                  type: number
+      responses:
+        "200":
+          description: Updated machine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Machine"
+  /pricing/quote:
+    post:
+      tags: [Pricing]
+      summary: Preview a quote using current machine rates, service fees, and campaigns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePricingQuoteRequest"
+      responses:
+        "200":
+          description: Quote preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingQuote"
   /orders/history:
     get:
       tags: [Orders]
       summary: List order history items
       responses:
-        '200':
+        "200":
           description: Order history
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/OrderHistoryItem'
+                  $ref: "#/components/schemas/OrderHistoryItem"
   /orders/{orderId}/history-item:
     get:
       tags: [Orders]
       summary: Get one order history item
       parameters:
-        - $ref: '#/components/parameters/OrderId'
+        - $ref: "#/components/parameters/OrderId"
       responses:
-        '200':
+        "200":
           description: Order history item
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrderHistoryItem'
-        '404':
+                $ref: "#/components/schemas/OrderHistoryItem"
+        "404":
           description: Order not found
   /orders/paid:
     post:
@@ -213,14 +592,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePaidOrderRequest'
+              $ref: "#/components/schemas/CreatePaidOrderRequest"
       responses:
-        '200':
+        "200":
           description: Paid order
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: "#/components/schemas/Order"
   /orders/manual:
     post:
       tags: [Orders]
@@ -230,28 +609,28 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateManualOrderRequest'
+              $ref: "#/components/schemas/CreateManualOrderRequest"
       responses:
-        '200':
+        "200":
           description: Manual order
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: "#/components/schemas/Order"
   /orders/{orderId}/refund:
     post:
       tags: [Orders]
       summary: Mark refund processed
       parameters:
-        - $ref: '#/components/parameters/OrderId'
+        - $ref: "#/components/parameters/OrderId"
       responses:
-        '200':
+        "200":
           description: Refunded order
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
-        '404':
+                $ref: "#/components/schemas/Order"
+        "404":
           description: Order not found
   /payments/sessions:
     post:
@@ -262,14 +641,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreatePaymentSessionRequest'
+              $ref: "#/components/schemas/CreatePaymentSessionRequest"
       responses:
-        '200':
+        "200":
           description: Payment session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentSession'
+                $ref: "#/components/schemas/PaymentSession"
   /payments/sessions/{sessionId}:
     get:
       tags: [Payments]
@@ -281,13 +660,13 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Payment session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentSession'
-        '404':
+                $ref: "#/components/schemas/PaymentSession"
+        "404":
           description: Session not found
   /reservations:
     post:
@@ -298,32 +677,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateReservationRequest'
+              $ref: "#/components/schemas/CreateReservationRequest"
       responses:
-        '200':
+        "200":
           description: Reservation created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineReservation'
+                $ref: "#/components/schemas/MachineReservation"
   /active-order-session:
     get:
       tags: [ActiveOrderSession]
       summary: Get the current active shared order session
       responses:
-        '200':
+        "200":
           description: Active order session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveOrderSession'
-        '404':
+                $ref: "#/components/schemas/ActiveOrderSession"
+        "404":
           description: No active session
     delete:
       tags: [ActiveOrderSession]
       summary: Clear the active shared order session
       responses:
-        '204':
+        "204":
           description: Session cleared
   /active-order-session/draft:
     post:
@@ -334,14 +713,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SaveActiveOrderDraftRequest'
+              $ref: "#/components/schemas/SaveActiveOrderDraftRequest"
       responses:
-        '200':
+        "200":
           description: Draft session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveOrderSession'
+                $ref: "#/components/schemas/ActiveOrderSession"
   /active-order-session/confirm:
     post:
       tags: [ActiveOrderSession]
@@ -359,13 +738,13 @@ paths:
                 userId:
                   type: integer
       responses:
-        '200':
+        "200":
           description: Confirmed session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveOrderSession'
-        '404':
+                $ref: "#/components/schemas/ActiveOrderSession"
+        "404":
           description: No active session
   /active-order-session/payment:
     post:
@@ -382,13 +761,13 @@ paths:
                 paymentReference:
                   type: string
       responses:
-        '200':
+        "200":
           description: Paid session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveOrderSession'
-        '404':
+                $ref: "#/components/schemas/ActiveOrderSession"
+        "404":
           description: No payable session
 components:
   securitySchemes:
@@ -422,6 +801,9 @@ components:
     PaymentStatus:
       type: string
       enum: [PENDING, PAID, FAILED, REFUNDED]
+    PricingDiscountType:
+      type: string
+      enum: [PERCENT, FIXED]
     PaymentSessionStatus:
       type: string
       enum: [AWAITING_SCAN, PROCESSING, PAID, FAILED]
@@ -431,6 +813,18 @@ components:
     ActiveOrderSessionStage:
       type: string
       enum: [DRAFT, BOOKED, PAID]
+    InventoryStockStatus:
+      type: string
+      enum: [HEALTHY, LOW, OUT_OF_STOCK]
+    InventoryRestockRequestStatus:
+      type: string
+      enum: [PENDING, APPROVED]
+    MaintenancePriority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH]
+    MaintenanceStatus:
+      type: string
+      enum: [MARKED, IN_PROGRESS, COMPLETED]
     PosUser:
       type: object
       required: [id, username, displayName, role]
@@ -445,7 +839,7 @@ components:
           type: string
           description: Usually omitted or blank in backend responses.
         role:
-          $ref: '#/components/schemas/UserRole'
+          $ref: "#/components/schemas/UserRole"
     AuthSession:
       type: object
       required: [accessToken, user]
@@ -460,7 +854,7 @@ components:
           format: date-time
           nullable: true
         user:
-          $ref: '#/components/schemas/PosUser'
+          $ref: "#/components/schemas/PosUser"
     Machine:
       type: object
       required: [id, name, type, capacityKg, price, status]
@@ -476,7 +870,7 @@ components:
         price:
           type: number
         status:
-          $ref: '#/components/schemas/MachineStatus'
+          $ref: "#/components/schemas/MachineStatus"
         currentOrderId:
           type: integer
           nullable: true
@@ -507,9 +901,388 @@ components:
         preferredDryerDurationMinutes:
           type: integer
           nullable: true
+    InventoryCategorySummary:
+      type: object
+      required: [category, itemCount, lowStockCount, outOfStockCount]
+      properties:
+        category:
+          type: string
+        itemCount:
+          type: integer
+        lowStockCount:
+          type: integer
+        outOfStockCount:
+          type: integer
+    InventoryDashboardMetrics:
+      type: object
+      required:
+        [
+          lowStockCount,
+          outOfStockCount,
+          stockValue,
+          pendingPurchaseOrders,
+          expiringSoonCount,
+        ]
+      properties:
+        lowStockCount:
+          type: integer
+        outOfStockCount:
+          type: integer
+        stockValue:
+          type: number
+        pendingPurchaseOrders:
+          type: integer
+        expiringSoonCount:
+          type: integer
+    InventoryDashboard:
+      type: object
+      required: [metrics, categories, suppliers, branches, locations]
+      properties:
+        metrics:
+          $ref: "#/components/schemas/InventoryDashboardMetrics"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryCategorySummary"
+        suppliers:
+          type: array
+          items:
+            type: string
+        branches:
+          type: array
+          items:
+            type: string
+        locations:
+          type: array
+          items:
+            type: string
+    InventoryItem:
+      type: object
+      required:
+        [
+          id,
+          sku,
+          name,
+          category,
+          branch,
+          location,
+          unit,
+          quantityOnHand,
+          reorderPoint,
+          unitCost,
+          stockValue,
+          stockStatus,
+          reorderUrgencyScore,
+        ]
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        supplier:
+          type: string
+          nullable: true
+        branch:
+          type: string
+        location:
+          type: string
+        unit:
+          type: string
+        quantityOnHand:
+          type: integer
+        reorderPoint:
+          type: integer
+        unitCost:
+          type: number
+        stockValue:
+          type: number
+        lastRestockedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        stockStatus:
+          $ref: "#/components/schemas/InventoryStockStatus"
+        reorderUrgencyScore:
+          type: integer
+        activeRestockRequestId:
+          type: integer
+          nullable: true
+        activeRestockRequestStatus:
+          allOf:
+            - $ref: "#/components/schemas/InventoryRestockRequestStatus"
+          nullable: true
+    InventoryRestockRequest:
+      type: object
+      required:
+        [
+          id,
+          requestNumber,
+          inventoryItemId,
+          itemName,
+          itemSku,
+          itemCategory,
+          branch,
+          location,
+          unit,
+          requestedQuantity,
+          status,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: integer
+        requestNumber:
+          type: string
+        inventoryItemId:
+          type: integer
+        itemName:
+          type: string
+        itemSku:
+          type: string
+        itemCategory:
+          type: string
+        supplier:
+          type: string
+          nullable: true
+        branch:
+          type: string
+        location:
+          type: string
+        unit:
+          type: string
+        requestedQuantity:
+          type: integer
+        status:
+          $ref: "#/components/schemas/InventoryRestockRequestStatus"
+        requestNotes:
+          type: string
+          nullable: true
+        operatorRemarks:
+          type: string
+          nullable: true
+        requestedByName:
+          type: string
+          nullable: true
+        approvedByName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+    MaintenanceRecord:
+      type: object
+      required:
+        [
+          id,
+          machineId,
+          issueTitle,
+          priority,
+          status,
+          reportedAt,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        machineId:
+          type: integer
+        issueTitle:
+          type: string
+        issueDescription:
+          type: string
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/MaintenancePriority"
+        status:
+          $ref: "#/components/schemas/MaintenanceStatus"
+        reportedByName:
+          type: string
+          nullable: true
+        startedByName:
+          type: string
+          nullable: true
+        completedByName:
+          type: string
+          nullable: true
+        reportedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        resolutionNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateMaintenanceRecordRequest:
+      type: object
+      required: [machineId, issueTitle]
+      properties:
+        machineId:
+          type: integer
+        issueTitle:
+          type: string
+        issueDescription:
+          type: string
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/MaintenancePriority"
+        reportedByName:
+          type: string
+          nullable: true
+    StartMaintenanceRecordRequest:
+      type: object
+      properties:
+        startedByName:
+          type: string
+          nullable: true
+    CompleteMaintenanceRecordRequest:
+      type: object
+      properties:
+        completedByName:
+          type: string
+          nullable: true
+        resolutionNotes:
+          type: string
+          nullable: true
+    PricingServiceFee:
+      type: object
+      required: [serviceCode, displayName, amount, isEnabled, updatedAt]
+      properties:
+        serviceCode:
+          type: string
+        displayName:
+          type: string
+        amount:
+          type: number
+        isEnabled:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+    PricingCampaign:
+      type: object
+      required:
+        [
+          id,
+          name,
+          discountType,
+          discountValue,
+          minOrderAmount,
+          isActive,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          $ref: "#/components/schemas/PricingDiscountType"
+        discountValue:
+          type: number
+        appliesToService:
+          type: string
+          nullable: true
+        minOrderAmount:
+          type: number
+        isActive:
+          type: boolean
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PricingQuoteLine:
+      type: object
+      required: [label, type, amount]
+      properties:
+        label:
+          type: string
+        type:
+          type: string
+          enum: [MACHINE, SERVICE_FEE, DISCOUNT]
+        amount:
+          type: number
+    PricingQuote:
+      type: object
+      required:
+        [
+          machineSubtotal,
+          serviceFeeTotal,
+          discountTotal,
+          finalTotal,
+          appliedCampaigns,
+          lines,
+        ]
+      properties:
+        machineSubtotal:
+          type: number
+        serviceFeeTotal:
+          type: number
+        discountTotal:
+          type: number
+        finalTotal:
+          type: number
+        appliedCampaigns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingCampaign"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingQuoteLine"
     Order:
       type: object
-      required: [id, machineId, customerId, serviceType, amount, status, paymentMethod, paymentStatus, paymentReference, timestamp]
+      required:
+        [
+          id,
+          machineId,
+          customerId,
+          serviceType,
+          amount,
+          status,
+          paymentMethod,
+          paymentStatus,
+          paymentReference,
+          timestamp,
+        ]
       properties:
         id:
           type: integer
@@ -525,11 +1298,11 @@ components:
         amount:
           type: number
         status:
-          $ref: '#/components/schemas/OrderStatus'
+          $ref: "#/components/schemas/OrderStatus"
         paymentMethod:
           type: string
         paymentStatus:
-          $ref: '#/components/schemas/PaymentStatus'
+          $ref: "#/components/schemas/PaymentStatus"
         paymentReference:
           type: string
         timestamp:
@@ -549,26 +1322,27 @@ components:
       required: [order, machine, customer]
       properties:
         order:
-          $ref: '#/components/schemas/Order'
+          $ref: "#/components/schemas/Order"
         machine:
-          $ref: '#/components/schemas/Machine'
+          $ref: "#/components/schemas/Machine"
         customer:
-          $ref: '#/components/schemas/Customer'
+          $ref: "#/components/schemas/Customer"
         dryerMachine:
           allOf:
-            - $ref: '#/components/schemas/Machine'
+            - $ref: "#/components/schemas/Machine"
           nullable: true
     FavoriteMachineStat:
       type: object
       required: [machine, usageCount]
       properties:
         machine:
-          $ref: '#/components/schemas/Machine'
+          $ref: "#/components/schemas/Machine"
         usageCount:
           type: integer
     MachineReservation:
       type: object
-      required: [id, machineId, customerId, startTime, endTime, status, createdAt]
+      required:
+        [id, machineId, customerId, startTime, endTime, status, createdAt]
       properties:
         id:
           type: integer
@@ -583,7 +1357,7 @@ components:
           type: string
           format: date-time
         status:
-          $ref: '#/components/schemas/ReservationStatus'
+          $ref: "#/components/schemas/ReservationStatus"
         createdAt:
           type: string
           format: date-time
@@ -601,21 +1375,29 @@ components:
       required: [reservation, machine, customer]
       properties:
         reservation:
-          $ref: '#/components/schemas/MachineReservation'
+          $ref: "#/components/schemas/MachineReservation"
         machine:
-          $ref: '#/components/schemas/Machine'
+          $ref: "#/components/schemas/Machine"
         customer:
-          $ref: '#/components/schemas/Customer'
+          $ref: "#/components/schemas/Customer"
     CustomerProfile:
       type: object
-      required: [customer, orders, totalSpent, totalVisits, favoriteMachines, upcomingReservations]
+      required:
+        [
+          customer,
+          orders,
+          totalSpent,
+          totalVisits,
+          favoriteMachines,
+          upcomingReservations,
+        ]
       properties:
         customer:
-          $ref: '#/components/schemas/Customer'
+          $ref: "#/components/schemas/Customer"
         orders:
           type: array
           items:
-            $ref: '#/components/schemas/OrderHistoryItem'
+            $ref: "#/components/schemas/OrderHistoryItem"
         totalSpent:
           type: number
         totalVisits:
@@ -623,14 +1405,25 @@ components:
         favoriteMachines:
           type: array
           items:
-            $ref: '#/components/schemas/FavoriteMachineStat'
+            $ref: "#/components/schemas/FavoriteMachineStat"
         upcomingReservations:
           type: array
           items:
-            $ref: '#/components/schemas/ReservationHistoryItem'
+            $ref: "#/components/schemas/ReservationHistoryItem"
     PaymentSession:
       type: object
-      required: [id, amount, paymentMethod, reference, qrPayload, status, attempt, createdAt, checkedAt]
+      required:
+        [
+          id,
+          amount,
+          paymentMethod,
+          reference,
+          qrPayload,
+          status,
+          attempt,
+          createdAt,
+          checkedAt,
+        ]
       properties:
         id:
           type: integer
@@ -643,7 +1436,7 @@ components:
         qrPayload:
           type: string
         status:
-          $ref: '#/components/schemas/PaymentSessionStatus'
+          $ref: "#/components/schemas/PaymentSessionStatus"
         attempt:
           type: integer
         createdAt:
@@ -657,7 +1450,18 @@ components:
           nullable: true
     ActiveOrderSession:
       type: object
-      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, paymentMethod, stage, createdAt]
+      required:
+        [
+          customerName,
+          customerPhone,
+          loadSizeKg,
+          washOption,
+          washerMachineId,
+          dryerMachineId,
+          paymentMethod,
+          stage,
+          createdAt,
+        ]
       properties:
         customerName:
           type: string
@@ -674,7 +1478,7 @@ components:
         paymentMethod:
           type: string
         stage:
-          $ref: '#/components/schemas/ActiveOrderSessionStage'
+          $ref: "#/components/schemas/ActiveOrderSessionStage"
         createdAt:
           type: string
           format: date-time
@@ -736,9 +1540,91 @@ components:
           type: integer
         shouldFail:
           type: boolean
+    CreateInventoryRestockRequest:
+      type: object
+      required: [inventoryItemId, requestedQuantity]
+      properties:
+        inventoryItemId:
+          type: integer
+        requestedQuantity:
+          type: integer
+        requestNotes:
+          type: string
+          nullable: true
+    ApproveInventoryRestockRequest:
+      type: object
+      required: [operatorRemarks]
+      properties:
+        operatorRemarks:
+          type: string
+    CreatePricingCampaignRequest:
+      type: object
+      required: [name, discountType, discountValue]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          $ref: "#/components/schemas/PricingDiscountType"
+        discountValue:
+          type: number
+        appliesToService:
+          type: string
+          nullable: true
+        minOrderAmount:
+          type: number
+        isActive:
+          type: boolean
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+    UpdatePricingCampaignRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          $ref: "#/components/schemas/PricingDiscountType"
+        discountValue:
+          type: number
+        appliesToService:
+          type: string
+          nullable: true
+        minOrderAmount:
+          type: number
+        isActive:
+          type: boolean
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
     CreateManualOrderRequest:
       type: object
-      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, orderStatus, paymentMethod]
+      required:
+        [
+          customerName,
+          customerPhone,
+          loadSizeKg,
+          washOption,
+          washerMachineId,
+          dryerMachineId,
+          orderStatus,
+          paymentMethod,
+        ]
       properties:
         customerName:
           type: string
@@ -753,7 +1639,7 @@ components:
         dryerMachineId:
           type: integer
         orderStatus:
-          $ref: '#/components/schemas/OrderStatus'
+          $ref: "#/components/schemas/OrderStatus"
         paymentMethod:
           type: string
         createdByUserId:
@@ -784,7 +1670,16 @@ components:
           nullable: true
     SaveActiveOrderDraftRequest:
       type: object
-      required: [customerName, customerPhone, loadSizeKg, washOption, washerMachineId, dryerMachineId, paymentMethod]
+      required:
+        [
+          customerName,
+          customerPhone,
+          loadSizeKg,
+          washOption,
+          washerMachineId,
+          dryerMachineId,
+          paymentMethod,
+        ]
       properties:
         customerName:
           type: string
@@ -800,3 +1695,21 @@ components:
           type: integer
         paymentMethod:
           type: string
+    CreatePricingQuoteRequest:
+      type: object
+      required: [selectedServices]
+      properties:
+        washerMachineId:
+          type: integer
+          nullable: true
+        dryerMachineId:
+          type: integer
+          nullable: true
+        ironingMachineId:
+          type: integer
+          nullable: true
+        selectedServices:
+          type: array
+          items:
+            type: string
+            enum: [Washing, Drying, Ironing]

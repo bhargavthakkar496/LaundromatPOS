@@ -1,4 +1,4 @@
-package com.laundromat.pos.ui.customer
+package com.washpos.app.ui.customer
 
 import android.os.Bundle
 import android.view.View
@@ -10,12 +10,12 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.laundromat.pos.R
-import com.laundromat.pos.data.model.Machine
-import com.laundromat.pos.data.model.MachineStatus
-import com.laundromat.pos.data.repository.PosRepository
-import com.laundromat.pos.payment.QrPaymentGateway
-import com.laundromat.pos.ui.common.UiThread
+import com.washpos.app.R
+import com.washpos.app.data.model.Machine
+import com.washpos.app.data.model.MachineStatus
+import com.washpos.app.data.repository.PosRepository
+import com.washpos.app.payment.QrPaymentGateway
+import com.washpos.app.ui.common.UiThread
 import java.util.UUID
 
 class CustomerSelfServiceActivity : AppCompatActivity() {

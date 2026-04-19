@@ -2,10 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
-import 'package:laundromat_pos_flutter/src/data/backend_pos_repository.dart';
-import 'package:laundromat_pos_flutter/src/models/machine.dart';
-import 'package:laundromat_pos_flutter/src/services/backend_api_client.dart';
-import 'package:laundromat_pos_flutter/src/services/session_store.dart';
+import 'package:washpos_flutter/src/models/active_order_session.dart';
+import 'package:washpos_flutter/src/data/backend_pos_repository.dart';
+import 'package:washpos_flutter/src/models/machine.dart';
+import 'package:washpos_flutter/src/services/backend_api_client.dart';
+import 'package:washpos_flutter/src/services/session_store.dart';
 
 const _runBackendSmoke = bool.fromEnvironment(
   'POS_RUN_BACKEND_SMOKE',
@@ -97,13 +98,17 @@ void main() {
         (machine) => machine.isWasher && machine.isAvailable,
       );
       final dryer = machines.firstWhere(
-        (machine) => !machine.isWasher && machine.isAvailable,
+        (machine) => machine.isDryer && machine.isAvailable,
       );
 
       final draft = await repository.saveActiveOrderDraft(
         customerName: 'Flutter Backend Smoke',
         customerPhone: customerPhone,
         loadSizeKg: 8,
+        selectedServices: const [
+          LaundryService.washing,
+          LaundryService.drying,
+        ],
         washOption: 'Gentle Wash',
         washer: washer,
         dryer: dryer,
@@ -118,7 +123,8 @@ void main() {
       expect(confirmed!.isBooked, isTrue);
       expect(confirmed.orderId, isNotNull);
 
-      final paymentReference = 'BOOK-FLUTTER-${DateTime.now().millisecondsSinceEpoch}';
+      final paymentReference =
+          'BOOK-FLUTTER-${DateTime.now().millisecondsSinceEpoch}';
       final paid = await repository.completeActiveOrderPayment(
         paymentReference: paymentReference,
       );

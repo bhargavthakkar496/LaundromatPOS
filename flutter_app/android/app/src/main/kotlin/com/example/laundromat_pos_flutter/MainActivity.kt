@@ -1,4 +1,4 @@
-package com.example.laundromat_pos_flutter
+package com.example.washpos_flutter
 
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
