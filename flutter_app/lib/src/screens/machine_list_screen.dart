@@ -6,14 +6,12 @@ import 'package:flutter/material.dart';
 import '../config/demo_settings.dart';
 import '../data/pos_repository.dart';
 import '../models/inventory.dart';
-import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
 import '../services/app_routes.dart';
 import '../services/open_external_url.dart';
 import '../services/whatsapp_notification_service.dart';
 import '../widgets/manager_option_icon.dart';
-import 'customer_self_service_screen.dart';
 import 'customer_profile_screen.dart';
 import 'inventory_screen.dart';
 import 'maintenance_screen.dart';
@@ -23,6 +21,8 @@ import 'order_management_screen.dart';
 import 'order_history_screen.dart';
 import 'pricing_screen.dart';
 import 'refund_requests_screen.dart';
+import 'revenue_dashboard_screen.dart';
+import 'staff_management_screen.dart';
 
 class MachineListScreen extends StatefulWidget {
   const MachineListScreen({
@@ -425,6 +425,19 @@ class _MachineListScreenState extends State<MachineListScreen> {
       return;
     }
 
+    if (action.title == 'Staff') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => StaffManagementScreen(
+            repository: widget.repository,
+            managerName: widget.user.displayName,
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
+      return;
+    }
+
     if (action.title == 'Maintenance') {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -459,6 +472,19 @@ class _MachineListScreenState extends State<MachineListScreen> {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => RefundRequestsScreen(
+            repository: widget.repository,
+            user: widget.user,
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
+      return;
+    }
+
+    if (action.title == 'Revenue & Day End') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => RevenueDashboardScreen(
             repository: widget.repository,
             user: widget.user,
           ),

@@ -12,6 +12,8 @@ import '../models/payment_session.dart';
 import '../models/pos_user.dart';
 import '../models/pricing.dart';
 import '../models/refund_request.dart';
+import '../models/revenue.dart';
+import '../models/staff.dart';
 
 abstract class PosRepository {
   Future<void> initialize();
@@ -244,5 +246,59 @@ abstract class PosRepository {
   Future<RefundRequest?> markRefundRequestProcessed({
     required int requestId,
     String? processedByName,
+  });
+
+  Future<List<DayEndCheckout>> getDayEndCheckouts({
+    int limit = 30,
+  });
+
+  Future<DayEndCheckout> createDayEndCheckout({
+    required DateTime businessDate,
+    required double openingCash,
+    required double closingCashCounted,
+    String? notes,
+    required String closedByName,
+  });
+
+  Future<List<StaffMember>> getStaffMembers();
+
+  Future<List<StaffShift>> getStaffShifts({
+    required DateTime start,
+    required DateTime end,
+  });
+
+  Future<StaffShift> saveStaffShift({
+    int? shiftId,
+    required int staffId,
+    required DateTime shiftDate,
+    required String startTimeLabel,
+    required String endTimeLabel,
+    required String branch,
+    required String assignment,
+    required double hours,
+  });
+
+  Future<List<StaffLeaveRequest>> getStaffLeaveRequests({
+    String? status,
+  });
+
+  Future<StaffLeaveRequest?> updateStaffLeaveRequestStatus({
+    required int leaveRequestId,
+    required String status,
+    String? reviewedByName,
+  });
+
+  Future<List<StaffPayout>> getStaffPayouts();
+
+  Future<StaffPayout> createStaffPayout({
+    required int staffId,
+    required String periodLabel,
+    required double hoursWorked,
+    required double bonusAmount,
+    required double deductionsAmount,
+  });
+
+  Future<StaffPayout?> markStaffPayoutPaid({
+    required int payoutId,
   });
 }

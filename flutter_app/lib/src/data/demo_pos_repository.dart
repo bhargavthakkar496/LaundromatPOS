@@ -21,8 +21,11 @@ import '../models/pricing.dart';
 import '../models/refund_request.dart';
 import '../models/reservation_history_item.dart';
 import '../models/auth_session.dart';
+import '../models/revenue.dart';
+import '../models/staff.dart';
 import '../services/machine_integration_factory.dart';
 import '../services/machine_integration_service.dart';
+import '../services/revenue_reporting_service.dart';
 import 'pos_repository.dart';
 
 class DemoPosRepository implements PosRepository {
@@ -34,6 +37,11 @@ class DemoPosRepository implements PosRepository {
   static const _pricingCampaignsKey = 'pricing_campaigns_v1';
   static const _maintenanceRecordsKey = 'maintenance_records_v1';
   static const _refundRequestsKey = 'refund_requests_v1';
+  static const _dayEndCheckoutsKey = 'day_end_checkouts_v1';
+  static const _staffMembersKey = 'staff_members_v1';
+  static const _staffShiftsKey = 'staff_shifts_v1';
+  static const _staffLeaveRequestsKey = 'staff_leave_requests_v1';
+  static const _staffPayoutsKey = 'staff_payouts_v1';
   static const _activeOrderSessionKey = 'active_order_session_v1';
   static const _customerCounterKey = 'customer_counter_v1';
   static const _orderCounterKey = 'order_counter_v1';
@@ -42,6 +50,10 @@ class DemoPosRepository implements PosRepository {
   static const _pricingCampaignCounterKey = 'pricing_campaign_counter_v1';
   static const _maintenanceRecordCounterKey = 'maintenance_record_counter_v1';
   static const _refundRequestCounterKey = 'refund_request_counter_v1';
+  static const _dayEndCheckoutCounterKey = 'day_end_checkout_counter_v1';
+  static const _staffShiftCounterKey = 'staff_shift_counter_v1';
+  static const _staffLeaveRequestCounterKey = 'staff_leave_request_counter_v1';
+  static const _staffPayoutCounterKey = 'staff_payout_counter_v1';
 
   final List<PosUser> _users = [];
   final List<Machine> _machines = [];
@@ -52,6 +64,11 @@ class DemoPosRepository implements PosRepository {
   final List<PricingCampaign> _pricingCampaigns = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   final List<RefundRequest> _refundRequests = [];
+  final List<DayEndCheckout> _dayEndCheckouts = [];
+  final List<StaffMember> _staffMembers = [];
+  final List<StaffShift> _staffShifts = [];
+  final List<StaffLeaveRequest> _staffLeaveRequests = [];
+  final List<StaffPayout> _staffPayouts = [];
   final Map<int, _PaymentSessionRecord> _paymentSessions = {};
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
   final MachineIntegrationService _machineIntegration;
@@ -66,6 +83,10 @@ class DemoPosRepository implements PosRepository {
   int _pricingCampaignCounter = 0;
   int _maintenanceRecordCounter = 0;
   int _refundRequestCounter = 0;
+  int _dayEndCheckoutCounter = 0;
+  int _staffShiftCounter = 0;
+  int _staffLeaveRequestCounter = 0;
+  int _staffPayoutCounter = 0;
   int _inventoryRestockRequestCounter = 0;
   final List<InventoryRestockRequest> _inventoryRestockRequests = [];
   final List<InventoryStockMovement> _inventoryStockMovements = [
@@ -424,12 +445,58 @@ class DemoPosRepository implements PosRepository {
         shouldPersist = true;
       }
     }
+    if (_staffMembers.isEmpty) {
+      _staffMembers.addAll(_defaultStaffMembers());
+      shouldPersist = true;
+    }
+    if (_staffShifts.isEmpty) {
+      final shifts = _defaultStaffShifts();
+      if (shifts.isNotEmpty) {
+        _staffShifts.addAll(shifts);
+        _staffShiftCounter = shifts
+            .map((item) => item.id)
+            .fold<int>(0, (maxId, id) => id > maxId ? id : maxId);
+        shouldPersist = true;
+      }
+    }
+    if (_staffLeaveRequests.isEmpty) {
+      final leaveRequests = _defaultStaffLeaveRequests();
+      if (leaveRequests.isNotEmpty) {
+        _staffLeaveRequests.addAll(leaveRequests);
+        _staffLeaveRequestCounter = leaveRequests
+            .map((item) => item.id)
+            .fold<int>(0, (maxId, id) => id > maxId ? id : maxId);
+        shouldPersist = true;
+      }
+    }
+    if (_staffPayouts.isEmpty) {
+      final payouts = _defaultStaffPayouts();
+      if (payouts.isNotEmpty) {
+        _staffPayouts.addAll(payouts);
+        _staffPayoutCounter = payouts
+            .map((item) => item.id)
+            .fold<int>(0, (maxId, id) => id > maxId ? id : maxId);
+        shouldPersist = true;
+      }
+    }
     if (_pricingCampaignCounter < _pricingCampaigns.length) {
       _pricingCampaignCounter = _pricingCampaigns.length;
       shouldPersist = true;
     }
     if (_maintenanceRecordCounter < _maintenanceRecords.length) {
       _maintenanceRecordCounter = _maintenanceRecords.length;
+      shouldPersist = true;
+    }
+    if (_staffShiftCounter < _staffShifts.length) {
+      _staffShiftCounter = _staffShifts.length;
+      shouldPersist = true;
+    }
+    if (_staffLeaveRequestCounter < _staffLeaveRequests.length) {
+      _staffLeaveRequestCounter = _staffLeaveRequests.length;
+      shouldPersist = true;
+    }
+    if (_staffPayoutCounter < _staffPayouts.length) {
+      _staffPayoutCounter = _staffPayouts.length;
       shouldPersist = true;
     }
     if (shouldPersist) {
@@ -2083,6 +2150,214 @@ class DemoPosRepository implements PosRepository {
     return updated;
   }
 
+  @override
+  Future<List<DayEndCheckout>> getDayEndCheckouts({
+    int limit = 30,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    final checkouts = [..._dayEndCheckouts]
+      ..sort((left, right) => right.businessDate.compareTo(left.businessDate));
+    return checkouts.take(limit).toList();
+  }
+
+  @override
+  Future<DayEndCheckout> createDayEndCheckout({
+    required DateTime businessDate,
+    required double openingCash,
+    required double closingCashCounted,
+    String? notes,
+    required String closedByName,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await _loadPersistedState();
+
+    final normalizedDate = DateTime(
+      businessDate.year,
+      businessDate.month,
+      businessDate.day,
+    );
+
+    final existingIndex = _dayEndCheckouts.indexWhere(
+      (item) =>
+          item.businessDate.year == normalizedDate.year &&
+          item.businessDate.month == normalizedDate.month &&
+          item.businessDate.day == normalizedDate.day,
+    );
+    final id = existingIndex >= 0
+        ? _dayEndCheckouts[existingIndex].id
+        : ++_dayEndCheckoutCounter;
+
+    final checkout = RevenueReportingService.buildDayEndCheckout(
+      id: id,
+      businessDate: normalizedDate,
+      openingCash: openingCash,
+      closingCashCounted: closingCashCounted,
+      notes: notes,
+      closedByName: closedByName,
+      history: await getOrderHistory(),
+      refundRequests: await getRefundRequests(),
+    );
+
+    if (existingIndex >= 0) {
+      _dayEndCheckouts[existingIndex] = checkout;
+    } else {
+      _dayEndCheckouts.add(checkout);
+    }
+    await _persistState();
+    return checkout;
+  }
+
+  @override
+  Future<List<StaffMember>> getStaffMembers() async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    return [..._staffMembers]..sort((a, b) => a.fullName.compareTo(b.fullName));
+  }
+
+  @override
+  Future<List<StaffShift>> getStaffShifts({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    return _staffShifts.where((item) {
+      final day = DateTime(
+          item.shiftDate.year, item.shiftDate.month, item.shiftDate.day);
+      return !day.isBefore(start) && day.isBefore(end);
+    }).toList()
+      ..sort((a, b) => a.shiftDate.compareTo(b.shiftDate));
+  }
+
+  @override
+  Future<StaffShift> saveStaffShift({
+    int? shiftId,
+    required int staffId,
+    required DateTime shiftDate,
+    required String startTimeLabel,
+    required String endTimeLabel,
+    required String branch,
+    required String assignment,
+    required double hours,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await _loadPersistedState();
+    final normalizedDate =
+        DateTime(shiftDate.year, shiftDate.month, shiftDate.day);
+    final shift = StaffShift(
+      id: shiftId ?? ++_staffShiftCounter,
+      staffId: staffId,
+      shiftDate: normalizedDate,
+      startTimeLabel: startTimeLabel,
+      endTimeLabel: endTimeLabel,
+      branch: branch,
+      assignment: assignment,
+      hours: hours,
+    );
+    final index = _staffShifts.indexWhere((item) => item.id == shift.id);
+    if (index >= 0) {
+      _staffShifts[index] = shift;
+    } else {
+      _staffShifts.add(shift);
+    }
+    await _persistState();
+    return shift;
+  }
+
+  @override
+  Future<List<StaffLeaveRequest>> getStaffLeaveRequests(
+      {String? status}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    return _staffLeaveRequests.where((item) {
+      if (status == null || status.isEmpty) {
+        return true;
+      }
+      return item.status == status;
+    }).toList()
+      ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+  }
+
+  @override
+  Future<StaffLeaveRequest?> updateStaffLeaveRequestStatus({
+    required int leaveRequestId,
+    required String status,
+    String? reviewedByName,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await _loadPersistedState();
+    final index =
+        _staffLeaveRequests.indexWhere((item) => item.id == leaveRequestId);
+    if (index == -1) {
+      return null;
+    }
+    final updated = _staffLeaveRequests[index].copyWith(
+      status: status,
+      reviewedByName: reviewedByName,
+    );
+    _staffLeaveRequests[index] = updated;
+    await _persistState();
+    return updated;
+  }
+
+  @override
+  Future<List<StaffPayout>> getStaffPayouts() async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    return [..._staffPayouts]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  @override
+  Future<StaffPayout> createStaffPayout({
+    required int staffId,
+    required String periodLabel,
+    required double hoursWorked,
+    required double bonusAmount,
+    required double deductionsAmount,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await _loadPersistedState();
+    final staff = _staffMembers.firstWhere((item) => item.id == staffId);
+    final grossAmount = hoursWorked * staff.hourlyRate;
+    final payout = StaffPayout(
+      id: ++_staffPayoutCounter,
+      staffId: staffId,
+      staffName: staff.fullName,
+      periodLabel: periodLabel,
+      hoursWorked: hoursWorked,
+      grossAmount: grossAmount,
+      bonusAmount: bonusAmount,
+      deductionsAmount: deductionsAmount,
+      netAmount: grossAmount + bonusAmount - deductionsAmount,
+      status: StaffPayoutStatus.scheduled,
+      createdAt: DateTime.now(),
+    );
+    _staffPayouts.add(payout);
+    await _persistState();
+    return payout;
+  }
+
+  @override
+  Future<StaffPayout?> markStaffPayoutPaid({
+    required int payoutId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    await _loadPersistedState();
+    final index = _staffPayouts.indexWhere((item) => item.id == payoutId);
+    if (index == -1) {
+      return null;
+    }
+    final updated = _staffPayouts[index].copyWith(
+      status: StaffPayoutStatus.paid,
+      paidAt: DateTime.now(),
+    );
+    _staffPayouts[index] = updated;
+    await _persistState();
+    return updated;
+  }
+
   String _paymentReference(String prefix) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final random = Random();
@@ -2208,6 +2483,15 @@ class DemoPosRepository implements PosRepository {
       _maintenanceRecordsKey,
     );
     final refundRequestsJson = await _preferences.getString(_refundRequestsKey);
+    final dayEndCheckoutsJson = await _preferences.getString(
+      _dayEndCheckoutsKey,
+    );
+    final staffMembersJson = await _preferences.getString(_staffMembersKey);
+    final staffShiftsJson = await _preferences.getString(_staffShiftsKey);
+    final staffLeaveRequestsJson = await _preferences.getString(
+      _staffLeaveRequestsKey,
+    );
+    final staffPayoutsJson = await _preferences.getString(_staffPayoutsKey);
 
     _customers
       ..clear()
@@ -2233,6 +2517,21 @@ class DemoPosRepository implements PosRepository {
     _refundRequests
       ..clear()
       ..addAll(_decodeRefundRequests(refundRequestsJson));
+    _dayEndCheckouts
+      ..clear()
+      ..addAll(_decodeDayEndCheckouts(dayEndCheckoutsJson));
+    _staffMembers
+      ..clear()
+      ..addAll(_decodeStaffMembers(staffMembersJson));
+    _staffShifts
+      ..clear()
+      ..addAll(_decodeStaffShifts(staffShiftsJson));
+    _staffLeaveRequests
+      ..clear()
+      ..addAll(_decodeStaffLeaveRequests(staffLeaveRequestsJson));
+    _staffPayouts
+      ..clear()
+      ..addAll(_decodeStaffPayouts(staffPayoutsJson));
 
     _customerCounter =
         await _preferences.getInt(_customerCounterKey) ?? _customers.length;
@@ -2251,6 +2550,16 @@ class DemoPosRepository implements PosRepository {
     _refundRequestCounter =
         await _preferences.getInt(_refundRequestCounterKey) ??
             _refundRequests.length;
+    _dayEndCheckoutCounter =
+        await _preferences.getInt(_dayEndCheckoutCounterKey) ??
+            _dayEndCheckouts.length;
+    _staffShiftCounter =
+        await _preferences.getInt(_staffShiftCounterKey) ?? _staffShifts.length;
+    _staffLeaveRequestCounter =
+        await _preferences.getInt(_staffLeaveRequestCounterKey) ??
+            _staffLeaveRequests.length;
+    _staffPayoutCounter = await _preferences.getInt(_staffPayoutCounterKey) ??
+        _staffPayouts.length;
   }
 
   Future<void> _persistState() async {
@@ -2430,6 +2739,28 @@ class DemoPosRepository implements PosRepository {
             .toList(),
       ),
     );
+    await _preferences.setString(
+      _dayEndCheckoutsKey,
+      jsonEncode(
+        _dayEndCheckouts.map((checkout) => checkout.toJson()).toList(),
+      ),
+    );
+    await _preferences.setString(
+      _staffMembersKey,
+      jsonEncode(_staffMembers.map((item) => item.toJson()).toList()),
+    );
+    await _preferences.setString(
+      _staffShiftsKey,
+      jsonEncode(_staffShifts.map((item) => item.toJson()).toList()),
+    );
+    await _preferences.setString(
+      _staffLeaveRequestsKey,
+      jsonEncode(_staffLeaveRequests.map((item) => item.toJson()).toList()),
+    );
+    await _preferences.setString(
+      _staffPayoutsKey,
+      jsonEncode(_staffPayouts.map((item) => item.toJson()).toList()),
+    );
     await _preferences.setInt(_customerCounterKey, _customerCounter);
     await _preferences.setInt(_orderCounterKey, _orderCounter);
     await _preferences.setInt(
@@ -2444,6 +2775,16 @@ class DemoPosRepository implements PosRepository {
       _maintenanceRecordCounter,
     );
     await _preferences.setInt(_refundRequestCounterKey, _refundRequestCounter);
+    await _preferences.setInt(
+      _dayEndCheckoutCounterKey,
+      _dayEndCheckoutCounter,
+    );
+    await _preferences.setInt(_staffShiftCounterKey, _staffShiftCounter);
+    await _preferences.setInt(
+      _staffLeaveRequestCounterKey,
+      _staffLeaveRequestCounter,
+    );
+    await _preferences.setInt(_staffPayoutCounterKey, _staffPayoutCounter);
   }
 
   List<Customer> _decodeCustomers(String? raw) {
@@ -2653,6 +2994,214 @@ class DemoPosRepository implements PosRepository {
           ),
         )
         .toList();
+  }
+
+  List<DayEndCheckout> _decodeDayEndCheckouts(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map(
+          (item) => DayEndCheckout.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  List<StaffMember> _decodeStaffMembers(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => StaffMember.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<StaffShift> _decodeStaffShifts(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => StaffShift.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<StaffLeaveRequest> _decodeStaffLeaveRequests(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map(
+          (item) => StaffLeaveRequest.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  List<StaffPayout> _decodeStaffPayouts(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => StaffPayout.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<StaffMember> _defaultStaffMembers() {
+    return const [
+      StaffMember(
+        id: 1,
+        fullName: 'Store Admin',
+        role: StaffRole.admin,
+        phone: '9999999999',
+        hourlyRate: 220,
+        isActive: true,
+      ),
+      StaffMember(
+        id: 2,
+        fullName: 'Kiran Patel',
+        role: StaffRole.cashier,
+        phone: '9876500011',
+        hourlyRate: 120,
+        isActive: true,
+      ),
+      StaffMember(
+        id: 3,
+        fullName: 'Meera Shah',
+        role: StaffRole.manager,
+        phone: '9876500012',
+        hourlyRate: 180,
+        isActive: true,
+      ),
+      StaffMember(
+        id: 4,
+        fullName: 'Ravi Solanki',
+        role: StaffRole.technician,
+        phone: '9876500013',
+        hourlyRate: 150,
+        isActive: true,
+      ),
+      StaffMember(
+        id: 5,
+        fullName: 'Neha Joshi',
+        role: StaffRole.support,
+        phone: '9876500014',
+        hourlyRate: 110,
+        isActive: true,
+      ),
+    ];
+  }
+
+  List<StaffShift> _defaultStaffShifts() {
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    return [
+      StaffShift(
+        id: 1,
+        staffId: 2,
+        shiftDate: start,
+        startTimeLabel: '08:00',
+        endTimeLabel: '16:00',
+        branch: 'Main Branch',
+        assignment: 'Front counter and handover',
+        hours: 8,
+      ),
+      StaffShift(
+        id: 2,
+        staffId: 3,
+        shiftDate: start,
+        startTimeLabel: '10:00',
+        endTimeLabel: '18:00',
+        branch: 'Main Branch',
+        assignment: 'Floor supervision and approvals',
+        hours: 8,
+      ),
+      StaffShift(
+        id: 3,
+        staffId: 4,
+        shiftDate: start.add(const Duration(days: 1)),
+        startTimeLabel: '09:00',
+        endTimeLabel: '17:00',
+        branch: 'North Branch',
+        assignment: 'Machine servicing round',
+        hours: 8,
+      ),
+      StaffShift(
+        id: 4,
+        staffId: 5,
+        shiftDate: start.add(const Duration(days: 2)),
+        startTimeLabel: '12:00',
+        endTimeLabel: '20:00',
+        branch: 'Main Branch',
+        assignment: 'Customer support and pickup queue',
+        hours: 8,
+      ),
+    ];
+  }
+
+  List<StaffLeaveRequest> _defaultStaffLeaveRequests() {
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    return [
+      StaffLeaveRequest(
+        id: 1,
+        staffId: 2,
+        staffName: 'Kiran Patel',
+        leaveType: 'Casual Leave',
+        startDate: start.add(const Duration(days: 3)),
+        endDate: start.add(const Duration(days: 4)),
+        status: StaffLeaveStatus.pending,
+        reason: 'Family function out of town.',
+        requestedAt: start.subtract(const Duration(days: 1)),
+      ),
+      StaffLeaveRequest(
+        id: 2,
+        staffId: 4,
+        staffName: 'Ravi Solanki',
+        leaveType: 'Sick Leave',
+        startDate: start.subtract(const Duration(days: 2)),
+        endDate: start.subtract(const Duration(days: 1)),
+        status: StaffLeaveStatus.approved,
+        reason: 'Recovery after viral fever.',
+        requestedAt: start.subtract(const Duration(days: 4)),
+        reviewedByName: 'Store Admin',
+      ),
+    ];
+  }
+
+  List<StaffPayout> _defaultStaffPayouts() {
+    return [
+      StaffPayout(
+        id: 1,
+        staffId: 2,
+        staffName: 'Kiran Patel',
+        periodLabel: '01 Apr - 15 Apr',
+        hoursWorked: 96,
+        grossAmount: 11520,
+        bonusAmount: 600,
+        deductionsAmount: 200,
+        netAmount: 11920,
+        status: StaffPayoutStatus.scheduled,
+        createdAt: DateTime(2026, 4, 15, 18),
+      ),
+      StaffPayout(
+        id: 2,
+        staffId: 4,
+        staffName: 'Ravi Solanki',
+        periodLabel: '01 Apr - 15 Apr',
+        hoursWorked: 88,
+        grossAmount: 13200,
+        bonusAmount: 450,
+        deductionsAmount: 0,
+        netAmount: 13650,
+        status: StaffPayoutStatus.paid,
+        createdAt: DateTime(2026, 4, 15, 18),
+        paidAt: DateTime(2026, 4, 16, 11),
+      ),
+    ];
   }
 
   List<PricingServiceFee> _defaultPricingServiceFees() {
