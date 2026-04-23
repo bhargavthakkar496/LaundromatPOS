@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
-import '../localization/app_localizations.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
@@ -105,7 +104,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: priority,
+                  initialValue: priority,
                   decoration: const InputDecoration(labelText: 'Priority'),
                   items: const [
                     DropdownMenuItem(
@@ -304,7 +303,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.maintenance),
+        title: const Text('Maintenance Desk'),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),
