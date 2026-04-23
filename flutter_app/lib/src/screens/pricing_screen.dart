@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
-import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/pricing.dart';
-import '../services/backend_api_client.dart';
 
 class PricingScreen extends StatefulWidget {
   const PricingScreen({
@@ -94,28 +92,8 @@ class _PricingScreenState extends State<PricingScreen> {
     return null;
   }
 
-  String? _quoteValidationMessage() {
-    if (_selectedServices.isEmpty) {
-      return 'Select at least one service to preview a quote.';
-    }
-    if (_selectedServices.contains(LaundryService.washing) &&
-        _selectedWasherId == null) {
-      return 'Choose a washer before previewing a washing quote.';
-    }
-    if (_selectedServices.contains(LaundryService.drying) &&
-        _selectedDryerId == null) {
-      return 'Choose a dryer before previewing a drying quote.';
-    }
-    if (_selectedServices.contains(LaundryService.ironing) &&
-        _selectedIroningId == null) {
-      return 'Choose an ironing station before previewing an ironing quote.';
-    }
-    return null;
-  }
-
   Future<void> _editMachinePrice(Machine machine) async {
-    final controller =
-        TextEditingController(text: machine.price.toStringAsFixed(0));
+    final controller = TextEditingController(text: machine.price.toStringAsFixed(0));
     final nextValue = await showDialog<double>(
       context: context,
       builder: (context) => AlertDialog(
@@ -160,16 +138,13 @@ class _PricingScreenState extends State<PricingScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              '${machine.name} updated to INR ${nextValue.toStringAsFixed(0)}.')),
+      SnackBar(content: Text('${machine.name} updated to INR ${nextValue.toStringAsFixed(0)}.')),
     );
     _loadData(showLoading: false);
   }
 
   Future<void> _editServiceFee(PricingServiceFee fee) async {
-    final controller =
-        TextEditingController(text: fee.amount.toStringAsFixed(0));
+    final controller = TextEditingController(text: fee.amount.toStringAsFixed(0));
     var enabled = fee.isEnabled;
     final result = await showDialog<(double, bool)>(
       context: context,
@@ -192,8 +167,7 @@ class _PricingScreenState extends State<PricingScreen> {
                 ),
                 TextField(
                   controller: controller,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Fee amount',
                     prefixText: 'INR ',
@@ -295,18 +269,13 @@ class _PricingScreenState extends State<PricingScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: discountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: discountType == PricingDiscountType.percent
                         ? 'Discount percent'
                         : 'Discount amount',
-                    prefixText: discountType == PricingDiscountType.percent
-                        ? null
-                        : 'INR ',
-                    suffixText: discountType == PricingDiscountType.percent
-                        ? '%'
-                        : null,
+                    prefixText: discountType == PricingDiscountType.percent ? null : 'INR ',
+                    suffixText: discountType == PricingDiscountType.percent ? '%' : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -315,12 +284,9 @@ class _PricingScreenState extends State<PricingScreen> {
                   decoration: const InputDecoration(labelText: 'Applies to'),
                   items: const [
                     DropdownMenuItem(value: 'ALL', child: Text('All services')),
-                    DropdownMenuItem(
-                        value: LaundryService.washing, child: Text('Washing')),
-                    DropdownMenuItem(
-                        value: LaundryService.drying, child: Text('Drying')),
-                    DropdownMenuItem(
-                        value: LaundryService.ironing, child: Text('Ironing')),
+                    DropdownMenuItem(value: LaundryService.washing, child: Text('Washing')),
+                    DropdownMenuItem(value: LaundryService.drying, child: Text('Drying')),
+                    DropdownMenuItem(value: LaundryService.ironing, child: Text('Ironing')),
                   ],
                   onChanged: (value) {
                     if (value == null) {
@@ -334,8 +300,7 @@ class _PricingScreenState extends State<PricingScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: minOrderController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Minimum order amount',
                     prefixText: 'INR ',
@@ -351,10 +316,8 @@ class _PricingScreenState extends State<PricingScreen> {
             ),
             FilledButton(
               onPressed: () {
-                final discountValue =
-                    double.tryParse(discountController.text.trim());
-                final minOrder =
-                    double.tryParse(minOrderController.text.trim());
+                final discountValue = double.tryParse(discountController.text.trim());
+                final minOrder = double.tryParse(minOrderController.text.trim());
                 if (nameController.text.trim().isEmpty ||
                     discountValue == null ||
                     discountValue <= 0 ||
@@ -420,56 +383,27 @@ class _PricingScreenState extends State<PricingScreen> {
   }
 
   Future<void> _previewQuote() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final validationMessage = _quoteValidationMessage();
-    if (validationMessage != null) {
-      messenger.showSnackBar(SnackBar(content: Text(validationMessage)));
+    final quote = await widget.repository.previewPricingQuote(
+      washer: _machineById(_selectedWasherId),
+      dryer: _machineById(_selectedDryerId),
+      ironingStation: _machineById(_selectedIroningId),
+      selectedServices: _selectedServices.toList(),
+    );
+    if (!mounted) {
       return;
     }
-
-    try {
-      final quote = await widget.repository.previewPricingQuote(
-        washer: _selectedServices.contains(LaundryService.washing)
-            ? _machineById(_selectedWasherId)
-            : null,
-        dryer: _selectedServices.contains(LaundryService.drying)
-            ? _machineById(_selectedDryerId)
-            : null,
-        ironingStation: _selectedServices.contains(LaundryService.ironing)
-            ? _machineById(_selectedIroningId)
-            : null,
-        selectedServices: _selectedServices.toList(),
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _latestQuote = quote;
-      });
-    } on BackendApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.statusCode == 400
-                ? 'Quote preview needs a valid service and machine selection.'
-                : 'Could not preview quote: ${error.message}',
-          ),
-        ),
-      );
-    }
+    setState(() {
+      _latestQuote = quote;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeCampaignCount =
-        _campaigns.where((campaign) => campaign.isActive).length;
+    final activeCampaignCount = _campaigns.where((campaign) => campaign.isActive).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.pricing),
+        title: const Text('Pricing Desk'),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),
@@ -504,10 +438,7 @@ class _PricingScreenState extends State<PricingScreen> {
                           children: [
                             Text(
                               'Pricing Control Center',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -515,10 +446,7 @@ class _PricingScreenState extends State<PricingScreen> {
                             const SizedBox(height: 10),
                             Text(
                               'Finalize and operate four pricing actions from one place: machine rate cards, service fees, promotional campaigns, and live quote preview.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                     color: Colors.white.withValues(alpha: 0.9),
                                   ),
                             ),
@@ -529,15 +457,9 @@ class _PricingScreenState extends State<PricingScreen> {
                         spacing: 12,
                         runSpacing: 12,
                         children: [
-                          _ActionMetricCard(
-                              label: 'Rate Cards',
-                              value: '${_machines.length}'),
-                          _ActionMetricCard(
-                              label: 'Service Fees',
-                              value: '${_serviceFees.length}'),
-                          _ActionMetricCard(
-                              label: 'Active Campaigns',
-                              value: '$activeCampaignCount'),
+                          _ActionMetricCard(label: 'Rate Cards', value: '${_machines.length}'),
+                          _ActionMetricCard(label: 'Service Fees', value: '${_serviceFees.length}'),
+                          _ActionMetricCard(label: 'Active Campaigns', value: '$activeCampaignCount'),
                           _ActionMetricCard(
                             label: 'Latest Quote',
                             value: _latestQuote == null
@@ -580,8 +502,7 @@ class _PricingScreenState extends State<PricingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Machine Rate Cards',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text('Machine Rate Cards', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
               'Update base washer, dryer, and ironing station prices. These rates feed the quote preview and future order totals.',
@@ -611,19 +532,13 @@ class _PricingScreenState extends State<PricingScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(machine.name,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                              Text(machine.name, style: Theme.of(context).textTheme.titleMedium),
                               const SizedBox(height: 6),
-                              Text(
-                                  '${machine.type} • ${machine.capacityKg} kg'),
+                              Text('${machine.type} • ${machine.capacityKg} kg'),
                               const SizedBox(height: 10),
                               Text(
                                 'INR ${machine.price.toStringAsFixed(0)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(
+                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                       color: const Color(0xFF0F766E),
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -656,8 +571,7 @@ class _PricingScreenState extends State<PricingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Service Fee Controls',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text('Service Fee Controls', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
               'Manage optional pricing layers on top of the machine rate card. These are applied by selected service and flow into quote totals automatically.',
@@ -691,8 +605,7 @@ class _PricingScreenState extends State<PricingScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text('Campaign Management',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  child: Text('Campaign Management', style: Theme.of(context).textTheme.titleLarge),
                 ),
                 FilledButton.icon(
                   onPressed: _createCampaign,
@@ -708,8 +621,7 @@ class _PricingScreenState extends State<PricingScreen> {
             ),
             const SizedBox(height: 16),
             if (_campaigns.isEmpty)
-              const Text(
-                  'No campaigns yet. Create one to test offer-based pricing.')
+              const Text('No campaigns yet. Create one to test offer-based pricing.')
             else
               ..._campaigns.map(
                 (campaign) => Card(
@@ -729,8 +641,7 @@ class _PricingScreenState extends State<PricingScreen> {
                             ),
                             Switch.adaptive(
                               value: campaign.isActive,
-                              onChanged: (value) =>
-                                  _toggleCampaign(campaign, value),
+                              onChanged: (value) => _toggleCampaign(campaign, value),
                             ),
                           ],
                         ),
@@ -743,12 +654,10 @@ class _PricingScreenState extends State<PricingScreen> {
                           spacing: 12,
                           runSpacing: 8,
                           children: [
-                            _CampaignMeta(
-                                label: 'Type', value: campaign.discountType),
+                            _CampaignMeta(label: 'Type', value: campaign.discountType),
                             _CampaignMeta(
                               label: 'Value',
-                              value: campaign.discountType ==
-                                      PricingDiscountType.percent
+                              value: campaign.discountType == PricingDiscountType.percent
                                   ? '${campaign.discountValue.toStringAsFixed(0)}%'
                                   : 'INR ${campaign.discountValue.toStringAsFixed(0)}',
                             ),
@@ -758,8 +667,7 @@ class _PricingScreenState extends State<PricingScreen> {
                             ),
                             _CampaignMeta(
                               label: 'Min Order',
-                              value:
-                                  'INR ${campaign.minOrderAmount.toStringAsFixed(0)}',
+                              value: 'INR ${campaign.minOrderAmount.toStringAsFixed(0)}',
                             ),
                             _CampaignMeta(
                               label: 'Updated',
@@ -783,7 +691,6 @@ class _PricingScreenState extends State<PricingScreen> {
     final dryers = _machines.where((machine) => machine.isDryer).toList();
     final ironingStations =
         _machines.where((machine) => machine.isIroningStation).toList();
-    final quoteValidationMessage = _quoteValidationMessage();
 
     return Card(
       child: Padding(
@@ -794,8 +701,7 @@ class _PricingScreenState extends State<PricingScreen> {
             Row(
               children: [
                 Expanded(
-                  child: Text('Quote Preview',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  child: Text('Quote Preview', style: Theme.of(context).textTheme.titleLarge),
                 ),
                 FilledButton.icon(
                   onPressed: _previewQuote,
@@ -823,8 +729,7 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text(
-                                '${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
                           ),
                         )
                         .toList(),
@@ -844,8 +749,7 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text(
-                                '${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
                           ),
                         )
                         .toList(),
@@ -865,8 +769,7 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text(
-                                '${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
                           ),
                         )
                         .toList(),
@@ -925,33 +828,16 @@ class _PricingScreenState extends State<PricingScreen> {
                 ),
               ],
             ),
-            if (quoteValidationMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                quoteValidationMessage,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFB42318),
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
             if (_latestQuote != null) ...[
               const SizedBox(height: 18),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  _QuoteMetric(
-                      label: 'Machines', value: _latestQuote!.machineSubtotal),
-                  _QuoteMetric(
-                      label: 'Service Fees',
-                      value: _latestQuote!.serviceFeeTotal),
-                  _QuoteMetric(
-                      label: 'Discounts', value: -_latestQuote!.discountTotal),
-                  _QuoteMetric(
-                      label: 'Final Total',
-                      value: _latestQuote!.finalTotal,
-                      emphasized: true),
+                  _QuoteMetric(label: 'Machines', value: _latestQuote!.machineSubtotal),
+                  _QuoteMetric(label: 'Service Fees', value: _latestQuote!.serviceFeeTotal),
+                  _QuoteMetric(label: 'Discounts', value: -_latestQuote!.discountTotal),
+                  _QuoteMetric(label: 'Final Total', value: _latestQuote!.finalTotal, emphasized: true),
                 ],
               ),
               const SizedBox(height: 16),
