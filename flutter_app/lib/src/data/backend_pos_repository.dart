@@ -6,6 +6,8 @@ import '../models/active_order_session.dart';
 import '../models/auth_session.dart';
 import '../models/customer.dart';
 import '../models/customer_profile.dart';
+import '../models/delivery_task.dart';
+import '../models/garment_item.dart';
 import '../models/inventory.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
@@ -13,6 +15,7 @@ import '../models/machine_reservation.dart';
 import '../models/order.dart';
 import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
+import '../models/pickup_task.dart';
 import '../models/pos_user.dart';
 import '../models/pricing.dart';
 import '../models/refund_request.dart';
@@ -29,6 +32,8 @@ class BackendPosRepository implements PosRepository {
   }) : _apiClient = apiClient;
 
   static const _dayEndCheckoutsKey = 'backend_day_end_checkouts_v1';
+  static const _deliveryTasksKey = 'backend_delivery_tasks_v1';
+  static const _pickupTasksKey = 'backend_pickup_tasks_v1';
   static const _dayEndCheckoutCounterKey =
       'backend_day_end_checkout_counter_v1';
   static const _staffMembersKey = 'backend_staff_members_v1';
@@ -40,6 +45,17 @@ class BackendPosRepository implements PosRepository {
 
   final BackendApiClient _apiClient;
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
+
+  List<Machine> _normalizeMachineCycles(List<Machine> machines) {
+    final now = DateTime.now();
+    return machines
+        .map((machine) => machine.normalizedCycleStatus(now: now))
+        .toList();
+  }
+
+  Machine _normalizeMachineCycle(Machine machine) {
+    return machine.normalizedCycleStatus(now: DateTime.now());
+  }
 
   @override
   Future<void> initialize() async {}
@@ -70,24 +86,24 @@ class BackendPosRepository implements PosRepository {
       '/machines',
       queryParameters: {'status': MachineStatus.available},
     );
-    return items
-        .map((item) => decodeMachine(item as Map<String, dynamic>))
-        .toList();
+    return _normalizeMachineCycles(
+      items.map((item) => decodeMachine(item as Map<String, dynamic>)).toList(),
+    );
   }
 
   @override
   Future<List<Machine>> getMachines() async {
     final items = await _apiClient.getJsonList('/machines');
-    return items
-        .map((item) => decodeMachine(item as Map<String, dynamic>))
-        .toList();
+    return _normalizeMachineCycles(
+      items.map((item) => decodeMachine(item as Map<String, dynamic>)).toList(),
+    );
   }
 
   @override
   Future<Machine?> getMachineById(int machineId) async {
     try {
       final item = await _apiClient.getJson('/machines/$machineId');
-      return decodeMachine(item);
+      return _normalizeMachineCycle(decodeMachine(item));
     } on BackendApiException {
       return null;
     }
@@ -141,9 +157,9 @@ class BackendPosRepository implements PosRepository {
         'endTime': endTime.toIso8601String(),
       },
     );
-    return items
-        .map((item) => decodeMachine(item as Map<String, dynamic>))
-        .toList();
+    return _normalizeMachineCycles(
+      items.map((item) => decodeMachine(item as Map<String, dynamic>)).toList(),
+    );
   }
 
   @override
@@ -245,6 +261,7 @@ class BackendPosRepository implements PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -260,6 +277,7 @@ class BackendPosRepository implements PosRepository {
         'customerPhone': customerPhone,
         'loadSizeKg': loadSizeKg,
         'selectedServices': selectedServices,
+        'garmentItems': garmentItems.map((item) => item.toJson()).toList(),
         'washOption': washOption,
         'washerMachineId': washer?.id,
         'dryerMachineId': dryer?.id,
@@ -288,6 +306,7 @@ class BackendPosRepository implements PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -301,6 +320,7 @@ class BackendPosRepository implements PosRepository {
         'customerPhone': customerPhone,
         'loadSizeKg': loadSizeKg,
         'selectedServices': selectedServices,
+        'garmentItems': garmentItems.map((item) => item.toJson()).toList(),
         'washOption': washOption,
         'washerMachineId': washer?.id,
         'dryerMachineId': dryer?.id,
@@ -770,6 +790,82 @@ class BackendPosRepository implements PosRepository {
     } on BackendApiException {
       return null;
     }
+  }
+
+  @override
+  Future<List<DeliveryTask>> getDeliveryTasks() async {
+    final raw = await _preferences.getString(_deliveryTasksKey);
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final tasks = (jsonDecode(raw) as List<dynamic>)
+        .map((item) => DeliveryTask.fromJson(item as Map<String, dynamic>))
+        .toList()
+      ..sort((left, right) {
+        final leftUpdated =
+            left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final rightUpdated =
+            right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return rightUpdated.compareTo(leftUpdated);
+      });
+    return tasks;
+  }
+
+  @override
+  Future<DeliveryTask> saveDeliveryTask({
+    required DeliveryTask task,
+  }) async {
+    final items = [...await getDeliveryTasks()];
+    final normalized = task.copyWith(updatedAt: DateTime.now());
+    final index = items.indexWhere((item) => item.orderId == task.orderId);
+    if (index >= 0) {
+      items[index] = normalized;
+    } else {
+      items.add(normalized);
+    }
+    await _preferences.setString(
+      _deliveryTasksKey,
+      jsonEncode(items.map((item) => item.toJson()).toList()),
+    );
+    return normalized;
+  }
+
+  @override
+  Future<List<PickupTask>> getPickupTasks() async {
+    final raw = await _preferences.getString(_pickupTasksKey);
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final tasks = (jsonDecode(raw) as List<dynamic>)
+        .map((item) => PickupTask.fromJson(item as Map<String, dynamic>))
+        .toList()
+      ..sort((left, right) {
+        final leftUpdated =
+            left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final rightUpdated =
+            right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return rightUpdated.compareTo(leftUpdated);
+      });
+    return tasks;
+  }
+
+  @override
+  Future<PickupTask> savePickupTask({
+    required PickupTask task,
+  }) async {
+    final items = [...await getPickupTasks()];
+    final normalized = task.copyWith(updatedAt: DateTime.now());
+    final index = items.indexWhere((item) => item.orderId == task.orderId);
+    if (index >= 0) {
+      items[index] = normalized;
+    } else {
+      items.add(normalized);
+    }
+    await _preferences.setString(
+      _pickupTasksKey,
+      jsonEncode(items.map((item) => item.toJson()).toList()),
+    );
+    return normalized;
   }
 
   @override

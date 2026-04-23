@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/order_history_item.dart';
 import '../models/order.dart';
 import '../widgets/machine_icon.dart';
@@ -18,13 +19,14 @@ class OrderHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order History'),
+        title: Text(l10n.orderHistory),
         actions: [
           TextButton(
             onPressed: onLogout,
-            child: const Text('Log Out'),
+            child: Text(l10n.logout),
           ),
         ],
       ),

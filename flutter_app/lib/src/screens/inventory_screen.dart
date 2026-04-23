@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/inventory.dart';
 import '../widgets/inventory_category_icon.dart';
 
@@ -65,7 +66,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
 
     try {
-      final history = await widget.repository.getInventoryItemMovements(item.id);
+      final history =
+          await widget.repository.getInventoryItemMovements(item.id);
       if (!mounted) {
         return;
       }
@@ -215,13 +217,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final dashboard = _dashboard;
     final categories =
         dashboard?.categories ?? const <InventoryCategorySummary>[];
     final metrics = dashboard?.metrics;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Inventory')),
+      appBar: AppBar(title: Text(l10n.inventory)),
       body: RefreshIndicator(
         onRefresh: _refreshAll,
         child: ListView(
@@ -256,7 +259,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Inventory Dashboard',
+                          l10n.inventoryDashboard,
                           style: Theme.of(context)
                               .textTheme
                               .headlineMedium
@@ -267,7 +270,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'Track stock risk, pending replenishment, and item movement from one screen, then narrow into the exact items that need action.',
+                          l10n.inventoryDashboardDescription,
                           style:
                               Theme.of(context).textTheme.bodyLarge?.copyWith(
                                     color: Colors.white.withValues(alpha: 0.9),
@@ -281,16 +284,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     runSpacing: 12,
                     children: [
                       _InventorySummaryPill(
-                        label: 'Categories',
+                        label: l10n.categories,
                         value: '${categories.length}',
                       ),
                       _InventorySummaryPill(
-                        label: 'Visible Items',
+                        label: l10n.visibleItems,
                         value: '${_items.length}',
                       ),
                       _InventorySummaryPill(
-                        label: 'Selected',
-                        value: _selectedCategory ?? 'All',
+                        label: l10n.selected,
+                        value: _selectedCategory == null
+                            ? l10n.all
+                            : l10n.inventoryCategoryName(_selectedCategory!),
                       ),
                     ],
                   ),
@@ -309,27 +314,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 runSpacing: 12,
                 children: [
                   _InventoryMetricCard(
-                    label: 'Low Stock',
+                    label: l10n.lowStock,
                     value: '${metrics.lowStockCount}',
                     accent: const Color(0xFFD18A2C),
                   ),
                   _InventoryMetricCard(
-                    label: 'Out Of Stock',
+                    label: l10n.outOfStock,
                     value: '${metrics.outOfStockCount}',
                     accent: const Color(0xFFC54141),
                   ),
                   _InventoryMetricCard(
-                    label: 'Stock Value',
+                    label: l10n.stockValue,
                     value: 'INR ${metrics.stockValue.toStringAsFixed(0)}',
                     accent: const Color(0xFF2C9A65),
                   ),
                   _InventoryMetricCard(
-                    label: 'Pending POs',
+                    label: l10n.pendingPos,
                     value: '${metrics.pendingPurchaseOrders}',
                     accent: const Color(0xFF5E7CE2),
                   ),
                   _InventoryMetricCard(
-                    label: 'Expiring Soon',
+                    label: l10n.expiringSoon,
                     value: '${metrics.expiringSoonCount}',
                     accent: const Color(0xFFA54CC9),
                   ),
@@ -337,12 +342,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
             const SizedBox(height: 28),
             Text(
-              'Category Options',
+              l10n.categoryOptions,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
-              'Keep the compact category shortcuts, but use them as a filter over the full inventory dataset.',
+              l10n.categoryOptionsDescription,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFF4B6475),
                   ),
@@ -376,7 +381,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
             const SizedBox(height: 28),
             Text(
-              'Search, Filter, And Sort',
+              l10n.searchFilterSort,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
@@ -389,7 +394,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       controller: _searchController,
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.search_outlined),
-                        hintText: 'Search by item name or SKU',
+                        hintText: l10n.searchByItemOrSku,
                         suffixIcon: _searchController.text.isEmpty
                             ? null
                             : IconButton(
@@ -410,24 +415,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       children: [
                         _FilterDropdown(
                           width: 180,
-                          label: 'Stock status',
+                          label: l10n.stockStatus,
                           value: _selectedStockStatus,
-                          items: const [
+                          items: [
                             DropdownMenuItem(
                               value: InventoryStockStatus.healthy,
-                              child: Text('Healthy'),
+                              child: Text(l10n.healthy),
                             ),
                             DropdownMenuItem(
                               value: InventoryStockStatus.low,
-                              child: Text('Low'),
+                              child: Text(l10n.low),
                             ),
                             DropdownMenuItem(
                               value: InventoryStockStatus.outOfStock,
-                              child: Text('Out of stock'),
+                              child: Text(l10n.outOfStock),
                             ),
                             DropdownMenuItem(
                               value: InventoryStockStatus.inProcurement,
-                              child: Text('In procurement'),
+                              child: Text(l10n.inProcurement),
                             ),
                           ],
                           onChanged: (value) =>
@@ -477,36 +482,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         ),
                         _FilterDropdown(
                           width: 180,
-                          label: 'Sort by',
+                          label: l10n.sortBy,
                           value: _sortBy,
-                          items: const [
+                          items: [
                             DropdownMenuItem(
                               value: 'reorderUrgency',
-                              child: Text('Reorder urgency'),
+                              child: Text(l10n.reorderUrgency),
                             ),
                             DropdownMenuItem(
                               value: 'quantity',
-                              child: Text('Quantity'),
+                              child: Text(l10n.quantity),
                             ),
                             DropdownMenuItem(
                               value: 'lastRestockedAt',
-                              child: Text('Last restocked'),
+                              child: Text(l10n.lastRestocked),
                             ),
                           ],
                           onChanged: (value) => _updateFilters(sortBy: value),
                         ),
                         _FilterDropdown(
                           width: 160,
-                          label: 'Sort order',
+                          label: l10n.sortOrder,
                           value: _sortOrder,
-                          items: const [
+                          items: [
                             DropdownMenuItem(
                               value: 'desc',
-                              child: Text('Descending'),
+                              child: Text(l10n.descending),
                             ),
                             DropdownMenuItem(
                               value: 'asc',
-                              child: Text('Ascending'),
+                              child: Text(l10n.ascending),
                             ),
                           ],
                           onChanged: (value) =>
@@ -515,7 +520,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         OutlinedButton.icon(
                           onPressed: () => _updateFilters(clear: true),
                           icon: const Icon(Icons.restart_alt_outlined),
-                          label: const Text('Reset'),
+                          label: Text(l10n.reset),
                         ),
                       ],
                     ),
@@ -525,9 +530,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
             const SizedBox(height: 28),
             Text(
-              _selectedCategory == null
-                  ? 'All Inventory Items'
-                  : '$_selectedCategory Items',
+              l10n.inventoryItemsTitle(_selectedCategory),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 12),
@@ -537,11 +540,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_items.isEmpty)
-              const Card(
+              Card(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Text(
-                    'No inventory items match the current search and filters.',
+                    l10n.noInventoryItemsMatch,
                   ),
                 ),
               )
@@ -554,10 +557,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     creatingRequest: _creatingRestockRequestItemId == item.id,
                     expanded: _expandedItemIds.contains(item.id),
                     loadingHistory: _loadingMovementItemIds.contains(item.id),
-                    movementHistory: _movementHistoryByItemId[item.id] ?? const [],
+                    movementHistory:
+                        _movementHistoryByItemId[item.id] ?? const [],
                     onToggleDetails: () => _toggleItemDetails(item),
                     onCreateRestockRequest:
-                        item.stockStatus == InventoryStockStatus.outOfStock &&
+                        (item.stockStatus == InventoryStockStatus.low ||
+                                    item.stockStatus ==
+                                        InventoryStockStatus.outOfStock) &&
                                 item.activeRestockRequestId == null
                             ? () => _createRestockRequest(item)
                             : null,
@@ -639,6 +645,7 @@ class _InventoryCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _visualForCategory(summary.category);
+    final l10n = context.l10n;
 
     return Material(
       color: Colors.transparent,
@@ -681,7 +688,7 @@ class _InventoryCategoryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  summary.category,
+                  l10n.inventoryCategoryName(summary.category),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -690,7 +697,7 @@ class _InventoryCategoryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${summary.itemCount} items',
+                  '${summary.itemCount} ${l10n.inventoryItemsSuffix}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -724,20 +731,25 @@ class _InventoryItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _visualForCategory(item.category);
-    final activeRequestApproved =
-        item.activeRestockRequestStatus ==
+    final l10n = context.l10n;
+    final activeRequestApproved = item.activeRestockRequestStatus ==
         InventoryRestockRequestStatus.approved;
-    final activeRequestPending =
-        item.activeRestockRequestStatus ==
+    final activeRequestPending = item.activeRestockRequestStatus ==
         InventoryRestockRequestStatus.pending;
+    final canOrderOrRestock = item.stockStatus == InventoryStockStatus.low ||
+        item.stockStatus == InventoryStockStatus.outOfStock;
+    final showOrderSection = canOrderOrRestock ||
+        item.stockStatus == InventoryStockStatus.inProcurement ||
+        activeRequestApproved ||
+        activeRequestPending;
     final lastRestockedLabel = item.lastRestockedAt == null
-        ? 'Not recorded'
+        ? l10n.notSet
         : DateFormat('dd MMM yyyy').format(item.lastRestockedAt!);
     final expiryLabel = item.expiresAt == null
-        ? 'No expiry'
+        ? l10n.noExpiry
         : DateFormat('dd MMM yyyy').format(item.expiresAt!);
     final approvedAtLabel = item.activeRestockApprovedAt == null
-        ? 'Awaiting approval'
+        ? l10n.awaitingApproval
         : DateFormat('dd MMM yyyy').format(item.activeRestockApprovedAt!);
 
     return Card(
@@ -772,7 +784,7 @@ class _InventoryItemCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${item.sku} • ${item.category}',
+                        '${item.sku} • ${l10n.inventoryCategoryName(item.category)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -787,7 +799,7 @@ class _InventoryItemCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _ItemMeta(
-                  label: 'Quantity',
+                  label: l10n.quantity,
                   value: '${item.quantityOnHand} ${item.unit}',
                 ),
                 _ItemMeta(
@@ -795,27 +807,27 @@ class _InventoryItemCard extends StatelessWidget {
                   value: '${item.reorderPoint} ${item.unit}',
                 ),
                 _ItemMeta(
-                  label: 'Stock Value',
+                  label: l10n.stockValue,
                   value: 'INR ${item.stockValue.toStringAsFixed(0)}',
                 ),
                 _ItemMeta(
-                  label: 'Supplier',
-                  value: item.supplier ?? 'Unassigned',
+                  label: l10n.supplier,
+                  value: item.supplier ?? l10n.unassigned,
                 ),
                 _ItemMeta(
-                  label: 'Branch / Location',
+                  label: l10n.branchLocationShort,
                   value: '${item.branch} / ${item.location}',
                 ),
                 _ItemMeta(
-                  label: 'Last Restocked',
+                  label: l10n.lastRestocked,
                   value: lastRestockedLabel,
                 ),
                 _ItemMeta(
-                  label: 'Expiry',
+                  label: l10n.expiringSoon,
                   value: expiryLabel,
                 ),
                 _ItemMeta(
-                  label: 'Urgency',
+                  label: l10n.urgency,
                   value: '${item.reorderUrgencyScore}',
                 ),
               ],
@@ -826,35 +838,34 @@ class _InventoryItemCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _ItemMeta(
-                  label: 'Barcode',
-                  value: item.barcode ?? 'Not assigned',
+                  label: l10n.barcode,
+                  value: item.barcode ?? l10n.notAssigned,
                 ),
                 _ItemMeta(
-                  label: 'Pack Size',
-                  value: item.packSize ?? 'Not set',
+                  label: l10n.packSize,
+                  value: item.packSize ?? l10n.notSet,
                 ),
                 _ItemMeta(
-                  label: 'Unit Type',
+                  label: l10n.unitType,
                   value: item.unitType,
                 ),
                 _ItemMeta(
-                  label: 'Par Level',
+                  label: l10n.parLevel,
                   value: '${item.parLevel} ${item.unit}',
                 ),
                 _ItemMeta(
-                  label: 'Selling Price',
+                  label: l10n.sellingPrice,
                   value: item.sellingPrice == null
-                      ? 'Not applicable'
+                      ? l10n.notApplicable
                       : 'INR ${item.sellingPrice!.toStringAsFixed(0)}',
                 ),
                 _ItemMeta(
-                  label: 'Record Status',
-                  value: item.isActive ? 'Active' : 'Inactive',
+                  label: l10n.recordStatus,
+                  value: item.isActive ? l10n.active : l10n.inactive,
                 ),
               ],
             ),
-            if (item.stockStatus == InventoryStockStatus.outOfStock ||
-                item.stockStatus == InventoryStockStatus.inProcurement) ...[
+            if (showOrderSection) ...[
               const SizedBox(height: 16),
               if (activeRequestApproved)
                 Container(
@@ -870,7 +881,7 @@ class _InventoryItemCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Order checkout is approved and the item is now in procurement.',
+                        l10n.restockApproved,
                         style: const TextStyle(
                           color: Color(0xFF2C9A65),
                           fontWeight: FontWeight.w700,
@@ -882,17 +893,17 @@ class _InventoryItemCard extends StatelessWidget {
                         runSpacing: 8,
                         children: [
                           _ItemMeta(
-                            label: 'Restock Order',
+                            label: l10n.restockOrder,
                             value: item.activeRestockRequestNumber ??
                                 '#${item.activeRestockRequestId ?? '-'}',
                           ),
                           _ItemMeta(
-                            label: 'Approved Quantity',
+                            label: l10n.approvedQuantity,
                             value:
                                 '${item.activeRestockRequestedQuantity ?? 0} ${item.unit}',
                           ),
                           _ItemMeta(
-                            label: 'Approved On',
+                            label: l10n.approvedOn,
                             value: approvedAtLabel,
                           ),
                         ],
@@ -902,11 +913,12 @@ class _InventoryItemCard extends StatelessWidget {
                           .isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Text(
-                          'Operator remarks: ${item.activeRestockOperatorRemarks!}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF1F5C41),
-                                fontWeight: FontWeight.w600,
-                              ),
+                          '${l10n.operatorRemarks}: ${item.activeRestockOperatorRemarks!}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: const Color(0xFF1F5C41),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
                       ],
                     ],
@@ -922,8 +934,8 @@ class _InventoryItemCard extends StatelessWidget {
                     color: const Color(0xFFD78B2E).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Text(
-                    'Restock request has been sent to the operator screen and is awaiting approval.',
+                  child: Text(
+                    l10n.restockPendingApproval,
                     style: TextStyle(
                       color: Color(0xFFD78B2E),
                       fontWeight: FontWeight.w600,
@@ -936,8 +948,8 @@ class _InventoryItemCard extends StatelessWidget {
                   icon: const Icon(Icons.add_shopping_cart_outlined),
                   label: Text(
                     creatingRequest
-                        ? 'Creating Restock Request...'
-                        : 'Reorder / Restock',
+                        ? l10n.creatingRestockRequest
+                        : l10n.orderRestock,
                   ),
                 ),
             ],
@@ -950,7 +962,7 @@ class _InventoryItemCard extends StatelessWidget {
                     : Icons.history_toggle_off_outlined,
               ),
               label: Text(
-                expanded ? 'Hide Movement History' : 'Show Movement History',
+                expanded ? l10n.hideMovementHistory : l10n.showMovementHistory,
               ),
             ),
             if (expanded) ...[
@@ -978,6 +990,7 @@ class _MovementLedger extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -990,14 +1003,14 @@ class _MovementLedger extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Stock Movement History',
+            l10n.stockMovementHistory,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: 6),
           Text(
-            'Ledger entries help explain exactly how the current balance was reached.',
+            l10n.stockMovementHistoryDescription,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: const Color(0xFF4B6475),
                 ),
@@ -1010,7 +1023,7 @@ class _MovementLedger extends StatelessWidget {
             )
           else if (history.isEmpty)
             Text(
-              'No movement history recorded yet for this item.',
+              l10n.noMovementHistory,
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
@@ -1035,6 +1048,7 @@ class _MovementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final movementColor = _movementColor(entry.movementType);
     final quantityLabel = entry.quantityDelta > 0
         ? '+${entry.quantityDelta}'
@@ -1059,34 +1073,41 @@ class _MovementRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
-              _movementLabel(entry.movementType),
+              l10n.inventoryMovementLabel(entry.movementType),
               style: TextStyle(
                 color: movementColor,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          _ItemMeta(label: 'Delta', value: quantityLabel),
-          _ItemMeta(label: 'Balance', value: '${entry.balanceAfter}'),
+          _ItemMeta(label: l10n.delta, value: quantityLabel),
+          _ItemMeta(label: l10n.balance, value: '${entry.balanceAfter}'),
           _ItemMeta(
-            label: 'When',
+            label: l10n.when,
             value: DateFormat('dd MMM yyyy').format(entry.occurredAt),
           ),
           _ItemMeta(
-            label: 'Reference',
+            label: l10n.reference,
             value: [
               entry.referenceType,
               entry.referenceId,
-            ].whereType<String>().where((value) => value.isNotEmpty).join(' • ')
-                .trim().isEmpty
-                ? 'Manual entry'
+            ]
+                    .whereType<String>()
+                    .where((value) => value.isNotEmpty)
+                    .join(' • ')
+                    .trim()
+                    .isEmpty
+                ? l10n.manualEntry
                 : [
                     entry.referenceType,
                     entry.referenceId,
-                  ].whereType<String>().where((value) => value.isNotEmpty).join(' • '),
+                  ]
+                    .whereType<String>()
+                    .where((value) => value.isNotEmpty)
+                    .join(' • '),
           ),
           if ((entry.performedByName ?? '').trim().isNotEmpty)
-            _ItemMeta(label: 'By', value: entry.performedByName!),
+            _ItemMeta(label: l10n.by, value: entry.performedByName!),
           if ((entry.notes ?? '').trim().isNotEmpty)
             SizedBox(
               width: 320,
@@ -1118,25 +1139,6 @@ Color _movementColor(String movementType) {
   }
 }
 
-String _movementLabel(String movementType) {
-  switch (movementType) {
-    case InventoryStockMovementType.received:
-      return 'Received';
-    case InventoryStockMovementType.consumed:
-      return 'Consumed';
-    case InventoryStockMovementType.transferred:
-      return 'Transferred';
-    case InventoryStockMovementType.damaged:
-      return 'Damaged';
-    case InventoryStockMovementType.returned:
-      return 'Returned';
-    case InventoryStockMovementType.manualCorrection:
-      return 'Manual Correction';
-    default:
-      return movementType;
-  }
-}
-
 class _InventoryStatusChip extends StatelessWidget {
   const _InventoryStatusChip({
     required this.status,
@@ -1148,22 +1150,23 @@ class _InventoryStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color color;
     final String label;
+    final l10n = context.l10n;
     switch (status) {
       case InventoryStockStatus.inProcurement:
         color = const Color(0xFF1E7C93);
-        label = 'In Procurement';
+        label = l10n.inProcurement;
         break;
       case InventoryStockStatus.outOfStock:
         color = const Color(0xFFC54141);
-        label = 'Out Of Stock';
+        label = l10n.outOfStock;
         break;
       case InventoryStockStatus.low:
         color = const Color(0xFFD78B2E);
-        label = 'Low';
+        label = l10n.low;
         break;
       default:
         color = const Color(0xFF2C9A65);
-        label = 'Healthy';
+        label = l10n.healthy;
     }
 
     return Container(
@@ -1285,9 +1288,9 @@ class _FilterDropdown extends StatelessWidget {
           ),
         ),
         items: [
-          const DropdownMenuItem<String>(
+          DropdownMenuItem<String>(
             value: null,
-            child: Text('All'),
+            child: Text(context.l10n.all),
           ),
           ...items,
         ],

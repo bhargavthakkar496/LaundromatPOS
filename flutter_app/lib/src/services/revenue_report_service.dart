@@ -67,7 +67,7 @@ class RevenueReportService {
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headerStyle:
                 pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 8),
@@ -224,7 +224,7 @@ class RevenueReportService {
         pw.Text(title,
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
-        pw.Table.fromTextArray(
+        pw.TableHelper.fromTextArray(
           headerStyle:
               pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
           cellStyle: const pw.TextStyle(fontSize: 9),

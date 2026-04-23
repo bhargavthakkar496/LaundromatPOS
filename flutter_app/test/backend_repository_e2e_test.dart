@@ -4,7 +4,6 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 
 import 'package:washpos_flutter/src/models/active_order_session.dart';
 import 'package:washpos_flutter/src/data/backend_pos_repository.dart';
-import 'package:washpos_flutter/src/models/machine.dart';
 import 'package:washpos_flutter/src/services/backend_api_client.dart';
 import 'package:washpos_flutter/src/services/session_store.dart';
 

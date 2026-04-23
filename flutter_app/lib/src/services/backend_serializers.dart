@@ -2,6 +2,7 @@ import '../models/active_order_session.dart';
 import '../models/auth_session.dart';
 import '../models/customer.dart';
 import '../models/customer_profile.dart';
+import '../models/garment_item.dart';
 import '../models/inventory.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
@@ -241,6 +242,9 @@ Order decodeOrder(Map<String, dynamic> json) {
     washOption: json['washOption'] as String?,
     dryerMachineId: json['dryerMachineId'] as int?,
     ironingMachineId: json['ironingMachineId'] as int?,
+    garmentItems: (json['garmentItems'] as List<dynamic>? ?? const [])
+        .map((item) => GarmentItem.fromJson(item as Map<String, dynamic>))
+        .toList(),
   );
 }
 

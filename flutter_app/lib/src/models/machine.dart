@@ -56,6 +56,13 @@ class Machine {
 
   bool get isReadyForPickup => status == MachineStatus.readyForPickup;
 
+  bool get hasCycleEnded {
+    if (cycleEndsAt == null) {
+      return false;
+    }
+    return !cycleEndsAt!.isAfter(DateTime.now());
+  }
+
   int get productionCycleMinutes {
     if (isWasher) {
       return 35;
@@ -76,6 +83,16 @@ class Machine {
     }
     final remaining = cycleEndsAt!.difference(DateTime.now());
     return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  Machine normalizedCycleStatus({DateTime? now}) {
+    final referenceTime = now ?? DateTime.now();
+    if (status == MachineStatus.inUse &&
+        cycleEndsAt != null &&
+        !cycleEndsAt!.isAfter(referenceTime)) {
+      return copyWith(status: MachineStatus.readyForPickup);
+    }
+    return this;
   }
 
   Machine copyWith({

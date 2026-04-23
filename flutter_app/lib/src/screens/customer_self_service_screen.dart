@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
 import '../models/customer_profile.dart';
 import '../models/machine.dart';
@@ -356,7 +357,7 @@ class _CustomerSelfServiceScreenState extends State<CustomerSelfServiceScreen> {
         session == null ? null : _machineById(session.ironingMachineId);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customer Screen')),
+      appBar: AppBar(title: Text(context.l10n.customerScreenTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

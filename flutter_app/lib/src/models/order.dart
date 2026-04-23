@@ -1,7 +1,12 @@
+import 'garment_item.dart';
+
 class OrderStatus {
   static const booked = 'BOOKED';
   static const inProgress = 'IN_PROGRESS';
   static const completed = 'COMPLETED';
+  static const readyForPickup = 'READY_FOR_PICKUP';
+  static const outForDelivery = 'OUT_FOR_DELIVERY';
+  static const delivered = 'DELIVERED';
 }
 
 class PaymentStatus {
@@ -28,6 +33,7 @@ class Order {
     this.washOption,
     this.dryerMachineId,
     this.ironingMachineId,
+    this.garmentItems = const [],
   });
 
   final int id;
@@ -46,6 +52,7 @@ class Order {
   final String? washOption;
   final int? dryerMachineId;
   final int? ironingMachineId;
+  final List<GarmentItem> garmentItems;
 
   Order copyWith({
     int? id,
@@ -64,6 +71,7 @@ class Order {
     Object? washOption = _sentinel,
     Object? dryerMachineId = _sentinel,
     Object? ironingMachineId = _sentinel,
+    List<GarmentItem>? garmentItems,
   }) {
     return Order(
       id: id ?? this.id,
@@ -92,6 +100,7 @@ class Order {
       ironingMachineId: identical(ironingMachineId, _sentinel)
           ? this.ironingMachineId
           : ironingMachineId as int?,
+      garmentItems: garmentItems ?? this.garmentItems,
     );
   }
 }

@@ -5,11 +5,20 @@ import 'package:intl/intl.dart';
 
 import '../config/demo_settings.dart';
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
 import '../services/open_external_url.dart';
 import '../services/whatsapp_notification_service.dart';
+import '../ui/tokens/app_colors.dart';
+import '../widgets/dashboard_hero_banner.dart';
+import '../widgets/dashboard_section.dart';
+import '../widgets/dashboard_wrap_grid.dart';
 import '../widgets/machine_icon.dart';
+import '../widgets/meta_pill.dart';
+import '../widgets/metric_card.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/surface_card.dart';
 import 'checkout_screen.dart';
 
 class MachineOverviewScreen extends StatefulWidget {
@@ -143,7 +152,7 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                           ],
                         ),
                       ),
-                      _MachineStatusBadge(
+                      StatusBadge(
                         label: _statusLabel(machine),
                         color: statusColor,
                       ),
@@ -171,37 +180,37 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      _MachineMetaPill(
+                      MetaPill(
                         label: 'Machine ID',
                         value: '#${machine.id}',
                       ),
-                      _MachineMetaPill(
+                      MetaPill(
                         label: 'Cycle Duration',
                         value: _formatDuration(machine.cycleDuration),
                       ),
                       if (machine.isInUse)
-                        _MachineMetaPill(
+                        MetaPill(
                           label: 'Remaining',
                           value: _formatDuration(
                             _remainingCycleDuration(machine) ?? Duration.zero,
                           ),
                         ),
                       if (machine.cycleStartedAt != null)
-                        _MachineMetaPill(
+                        MetaPill(
                           label: 'Started At',
                           value: DateFormat('dd MMM, hh:mm a').format(
                             machine.cycleStartedAt!.toLocal(),
                           ),
                         ),
                       if (machine.cycleEndsAt != null)
-                        _MachineMetaPill(
+                        MetaPill(
                           label: 'Ends At',
                           value: DateFormat('dd MMM, hh:mm a').format(
                             machine.cycleEndsAt!.toLocal(),
                           ),
                         ),
                       if (machine.currentOrderId != null)
-                        _MachineMetaPill(
+                        MetaPill(
                           label: 'Current Order',
                           value: '#${machine.currentOrderId}',
                         ),
@@ -498,15 +507,15 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
 
   Color _statusColor(Machine machine, BuildContext context) {
     if (machine.isInUse) {
-      return const Color(0xFFC86B3C);
+      return AppColors.statusRunning;
     }
     if (machine.isReadyForPickup) {
-      return const Color(0xFF2A9D8F);
+      return AppColors.statusSuccess;
     }
     if (machine.status == MachineStatus.maintenance) {
       return Theme.of(context).colorScheme.error;
     }
-    return const Color(0xFF0E7490);
+    return AppColors.brandPrimary;
   }
 
   int _statusPriority(Machine machine) {
@@ -601,156 +610,119 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
         ? 'No active cycles are currently counting down in this category.'
         : '${nextReadyMachine.name} is the next machine due to finish in ${_formatDuration(_remainingCycleDuration(nextReadyMachine) ?? Duration.zero)}.';
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0E7490), Color(0xFF1AA0B8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return DashboardHeroBanner(
+      title: 'Live Machine Floor',
+      description:
+          'Track machine readiness, active cycles, and blocked capacity from one operator view.',
+      summary: summaryText,
+      maxContentWidth: 580,
+      gradient: const LinearGradient(
+        colors: [Color(0xFF0E7490), Color(0xFF1AA0B8)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      shadow: const BoxShadow(
+        color: Color(0x220E7490),
+        blurRadius: 24,
+        offset: Offset(0, 12),
+      ),
+      metrics: [
+        MetricCard(
+          label: 'Category',
+          value: _selectedCategory,
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x220E7490),
-            blurRadius: 24,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 580),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Live Machine Floor',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Track machine readiness, active cycles, and blocked capacity from one operator view.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.92),
-                      ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  summaryText,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _HeroMetricPill(label: 'Category', value: _selectedCategory),
-              _HeroMetricPill(
-                label: 'Visible',
-                value: '${_visibleMachines.length}',
-              ),
-              _HeroMetricPill(
-                label: 'Last Sync',
-                value: _lastUpdatedAt == null
-                    ? 'Pending'
-                    : DateFormat('hh:mm a').format(_lastUpdatedAt!.toLocal()),
-              ),
-            ],
-          ),
-        ],
-      ),
+        MetricCard(
+          label: 'Visible',
+          value: '${_visibleMachines.length}',
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
+        ),
+        MetricCard(
+          label: 'Last Sync',
+          value: _lastUpdatedAt == null
+              ? 'Pending'
+              : DateFormat('hh:mm a').format(_lastUpdatedAt!.toLocal()),
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
+        ),
+      ],
     );
   }
 
   Widget _buildFilterPanel(BuildContext context, int visibleCount) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _searchController,
-              onChanged: (_) {
-                setState(() {});
-              },
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search_outlined),
-                hintText: 'Search machines by name, type, or status',
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                        },
-                        icon: const Icon(Icons.close),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Machine Type',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _availableCategories
-                  .map(
-                    (category) => ChoiceChip(
-                      label: Text(category),
-                      selected: _selectedCategory == category,
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedCategory = category;
-                        });
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _searchController,
+            onChanged: (_) {
+              setState(() {});
+            },
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_outlined),
+              hintText: 'Search machines by name, type, or status',
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
                       },
+                      icon: const Icon(Icons.close),
                     ),
-                  )
-                  .toList(),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Machine Status',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _buildStatusChip('All', _allStatusFilter),
-                _buildStatusChip('Ready', MachineStatus.readyForPickup),
-                _buildStatusChip('Running', MachineStatus.inUse),
-                _buildStatusChip('Available', MachineStatus.available),
-                _buildStatusChip('Maintenance', MachineStatus.maintenance),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Text(
-              '$visibleCount machine${visibleCount == 1 ? '' : 's'} match the current view.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF4B6475),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Machine Type',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _availableCategories
+                .map(
+                  (category) => ChoiceChip(
+                    label: Text(category),
+                    selected: _selectedCategory == category,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    },
                   ),
-            ),
-          ],
-        ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Machine Status',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildStatusChip('All', _allStatusFilter),
+              _buildStatusChip('Ready', MachineStatus.readyForPickup),
+              _buildStatusChip('Running', MachineStatus.inUse),
+              _buildStatusChip('Available', MachineStatus.available),
+              _buildStatusChip('Maintenance', MachineStatus.maintenance),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$visibleCount machine${visibleCount == 1 ? '' : 's'} match the current view.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textMuted,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -788,22 +760,20 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
     required String title,
     required String message,
   }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Icon(Icons.local_laundry_service_outlined, size: 42),
-            const SizedBox(height: 12),
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
+    return SurfaceCard(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const Icon(Icons.local_laundry_service_outlined, size: 42),
+          const SizedBox(height: 12),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
       ),
     );
   }
@@ -912,7 +882,7 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _MachineStatusBadge(
+                      StatusBadge(
                         label: _statusLabel(machine),
                         color: statusColor,
                       ),
@@ -950,30 +920,30 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  _MachineMetaPill(
+                  MetaPill(
                     label: 'Capacity',
                     value: '${machine.capacityKg}kg',
                   ),
-                  _MachineMetaPill(
+                  MetaPill(
                     label: 'Price',
                     value: 'INR ${machine.price.toStringAsFixed(0)}',
                   ),
                   if (machine.isInUse)
-                    _MachineMetaPill(
+                    MetaPill(
                       label: 'Time Remaining',
                       value: _formatDuration(
                         _remainingCycleDuration(machine) ?? Duration.zero,
                       ),
                     ),
                   if (machine.cycleEndsAt != null)
-                    _MachineMetaPill(
+                    MetaPill(
                       label: 'Ends At',
                       value: DateFormat('hh:mm a').format(
                         machine.cycleEndsAt!.toLocal(),
                       ),
                     ),
                   if (machine.currentOrderId != null)
-                    _MachineMetaPill(
+                    MetaPill(
                       label: 'Current Order',
                       value: '#${machine.currentOrderId}',
                     ),
@@ -996,40 +966,16 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
     BuildContext context, {
     required List<Machine> machines,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final useGrid = width >= 920;
-        if (!useGrid) {
-          return Column(
-            children: machines
-                .map(
-                  (machine) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildMachineCard(context, machine),
-                  ),
-                )
-                .toList(),
-          );
-        }
-
-        final columns = width >= 1380 ? 3 : 2;
-        const spacing = 12.0;
-        final cardWidth = (width - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: machines
-              .map(
-                (machine) => SizedBox(
-                  width: cardWidth,
-                  child: _buildMachineCard(context, machine),
-                ),
-              )
-              .toList(),
-        );
-      },
+    return DashboardWrapGrid(
+      spacing: 12,
+      runSpacing: 12,
+      minChildWidth: 420,
+      maxColumns: 3,
+      children: machines
+          .map(
+            (machine) => _buildMachineCard(context, machine),
+          )
+          .toList(),
     );
   }
 
@@ -1044,14 +990,14 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Machine Overview')),
+        appBar: AppBar(title: Text(context.l10n.machineOverview)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Machine Overview'),
+        title: Text(context.l10n.machineOverview),
         actions: [
           if (_syncing)
             const Padding(
@@ -1078,29 +1024,39 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
           children: [
             _buildHeroCard(context, nextReadyMachine),
             const SizedBox(height: 18),
-            Wrap(
+            DashboardWrapGrid(
               spacing: 12,
               runSpacing: 12,
+              minChildWidth: 164,
+              maxColumns: 4,
               children: [
-                _MachineSummaryCard(
+                MetricCard(
                   label: 'Available',
                   value: '$_availableCount',
-                  accent: const Color(0xFF0E7490),
+                  accent: AppColors.brandPrimary,
+                  style: MetricCardStyle.outlined,
+                  showIndicator: true,
                 ),
-                _MachineSummaryCard(
+                MetricCard(
                   label: 'In Use',
                   value: '$_inUseCount',
-                  accent: const Color(0xFFC86B3C),
+                  accent: AppColors.statusRunning,
+                  style: MetricCardStyle.outlined,
+                  showIndicator: true,
                 ),
-                _MachineSummaryCard(
+                MetricCard(
                   label: 'Ready',
                   value: '$_readyCount',
-                  accent: const Color(0xFF2A9D8F),
+                  accent: AppColors.statusSuccess,
+                  style: MetricCardStyle.outlined,
+                  showIndicator: true,
                 ),
-                _MachineSummaryCard(
+                MetricCard(
                   label: 'Maintenance',
                   value: '$_maintenanceCount',
                   accent: Theme.of(context).colorScheme.error,
+                  style: MetricCardStyle.outlined,
+                  showIndicator: true,
                 ),
               ],
             ),
@@ -1130,195 +1086,31 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
               if (_selectedStatus == _allStatusFilter &&
                   readyMachines.isNotEmpty) ...[
                 const SizedBox(height: 24),
-                Text(
-                  'Needs Pickup Now',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Completed cycles are surfaced first so the operator can clear the floor quickly.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF4B6475),
-                      ),
-                ),
-                const SizedBox(height: 14),
-                _buildMachineSection(
-                  context,
-                  machines: readyMachines
-                      .map(
-                        (machine) => machine,
-                      )
-                      .toList(),
+                DashboardSection(
+                  title: 'Needs Pickup Now',
+                  description:
+                      'Completed cycles are surfaced first so the operator can clear the floor quickly.',
+                  child: _buildMachineSection(
+                    context,
+                    machines: readyMachines.toList(),
+                  ),
                 ),
               ],
               const SizedBox(height: 24),
-              Text(
-                _selectedStatus == MachineStatus.readyForPickup
+              DashboardSection(
+                title: _selectedStatus == MachineStatus.readyForPickup
                     ? 'Pickup Queue'
                     : 'Machine Queue',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Machines are sorted by urgency, then by upcoming cycle completion time.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF4B6475),
-                    ),
-              ),
-              const SizedBox(height: 14),
-              _buildMachineSection(
-                context,
-                machines: mainListMachines,
+                description:
+                    'Machines are sorted by urgency, then by upcoming cycle completion time.',
+                child: _buildMachineSection(
+                  context,
+                  machines: mainListMachines,
+                ),
               ),
             ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MachineSummaryCard extends StatelessWidget {
-  const _MachineSummaryCard({
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 164,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0EAF0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: accent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroMetricPill extends StatelessWidget {
-  const _HeroMetricPill({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.86),
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MachineStatusBadge extends StatelessWidget {
-  const _MachineStatusBadge({
-    required this.label,
-    required this.color,
-  });
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _MachineMetaPill extends StatelessWidget {
-  const _MachineMetaPill({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleSmall),
-        ],
       ),
     );
   }

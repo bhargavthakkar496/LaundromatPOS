@@ -9,6 +9,29 @@ import '../models/receipt_data.dart';
 class ReceiptService {
   static final DateFormat _dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
 
+  static String formatReceiptDate(DateTime timestamp) {
+    return _dateFormat.format(timestamp);
+  }
+
+  static String describeReceiptService(ReceiptData receipt) {
+    final buffer = StringBuffer();
+    if (receipt.order.selectedServices.isNotEmpty) {
+      buffer.write(receipt.order.selectedServices.join(', '));
+    } else {
+      buffer.write(receipt.machine.type);
+    }
+    if (receipt.order.loadSizeKg != null) {
+      buffer.write(' ${receipt.order.loadSizeKg}kg');
+    } else {
+      buffer.write(' ${receipt.machine.capacityKg}kg');
+    }
+    if (receipt.order.washOption != null &&
+        receipt.order.washOption!.isNotEmpty) {
+      buffer.write(' • ${receipt.order.washOption!}');
+    }
+    return buffer.toString();
+  }
+
   static String buildWhatsAppMessage(ReceiptData receipt) {
     final lines = [
       'WashPOS Receipt',
@@ -20,8 +43,34 @@ class ReceiptService {
       'Amount: INR ${receipt.order.amount.toStringAsFixed(0)}',
       'Payment: ${receipt.order.paymentMethod}',
       'Reference: ${receipt.order.paymentReference}',
-      'Date: ${_dateFormat.format(receipt.order.timestamp)}',
+      'Date: ${formatReceiptDate(receipt.order.timestamp)}',
       'Status: ${receipt.order.paymentStatus}',
+    ];
+
+    return lines.join('\n');
+  }
+
+  static String buildPrinterTextReceipt(ReceiptData receipt) {
+    final lines = <String>[
+      'WashPOS',
+      'Payment Receipt',
+      '--------------------------------',
+      'Order: #${receipt.order.id}',
+      'Date: ${formatReceiptDate(receipt.order.timestamp)}',
+      'Customer: ${receipt.customer.fullName}',
+      'Phone: ${receipt.customer.phone}',
+      'Machine: ${receipt.machine.name}',
+      'Service: ${describeReceiptService(receipt)}',
+      'Payment: ${receipt.order.paymentMethod}',
+      'Reference: ${receipt.order.paymentReference}',
+      '--------------------------------',
+      'Amount Paid: INR ${receipt.order.amount.toStringAsFixed(0)}',
+      '',
+      'Thank you for your payment.',
+      'Please keep this slip for your records.',
+      '',
+      '',
+      '',
     ];
 
     return lines.join('\n');
@@ -56,14 +105,11 @@ class ReceiptService {
               ),
               pw.SizedBox(height: 16),
               _row('Order', '#${receipt.order.id}'),
-              _row('Date', _dateFormat.format(receipt.order.timestamp)),
+              _row('Date', formatReceiptDate(receipt.order.timestamp)),
               _row('Customer', receipt.customer.fullName),
               _row('Phone', receipt.customer.phone),
               _row('Machine', receipt.machine.name),
-              _row(
-                'Service',
-                '${receipt.machine.type} • ${receipt.machine.capacityKg}kg',
-              ),
+              _row('Service', describeReceiptService(receipt)),
               _row('Payment', receipt.order.paymentMethod),
               _row('Reference', receipt.order.paymentReference),
               pw.Divider(),

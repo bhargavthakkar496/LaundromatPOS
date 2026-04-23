@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
 import '../models/payment_session.dart';
@@ -164,7 +165,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final amount = widget.machine.price.toStringAsFixed(0);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
+      appBar: AppBar(title: Text(context.l10n.checkout)),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -189,7 +190,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('${widget.machine.type} • ${widget.machine.capacityKg}kg'),
+                    Text(
+                        '${widget.machine.type} • ${widget.machine.capacityKg}kg'),
                     const SizedBox(height: 8),
                     Text('Amount: INR $amount'),
                   ],
@@ -227,7 +229,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _submitting ? null : _completeCheckout,
-              child: Text(_submitting ? 'Processing payment...' : 'Complete Payment'),
+              child: Text(
+                  _submitting ? 'Processing payment...' : 'Complete Payment'),
             ),
             if (_order != null) ...[
               const SizedBox(height: 24),
@@ -244,7 +247,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text('Reference: ${_order!.paymentReference}'),
-                      Text('Status: ${_order!.status} / ${_order!.paymentStatus}'),
+                      Text(
+                          'Status: ${_order!.status} / ${_order!.paymentStatus}'),
                       if (_cycleMachine != null) ...[
                         const SizedBox(height: 8),
                         Text(

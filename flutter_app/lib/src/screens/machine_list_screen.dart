@@ -5,17 +5,27 @@ import 'package:flutter/material.dart';
 
 import '../config/demo_settings.dart';
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/inventory.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
-import '../services/app_routes.dart';
 import '../services/open_external_url.dart';
+import '../services/customer_display_launcher.dart';
 import '../services/whatsapp_notification_service.dart';
+import '../ui/tokens/app_colors.dart';
+import '../ui/tokens/app_radius.dart';
+import '../ui/tokens/app_spacing.dart';
+import '../widgets/dashboard_section.dart';
+import '../widgets/dashboard_wrap_grid.dart';
 import '../widgets/manager_option_icon.dart';
+import '../widgets/meta_pill.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/surface_card.dart';
 import 'customer_profile_screen.dart';
 import 'inventory_screen.dart';
 import 'maintenance_screen.dart';
 import 'machine_overview_screen.dart';
+import 'delivery_pickup_screen.dart';
 import 'operator_payment_screen.dart';
 import 'order_management_screen.dart';
 import 'order_history_screen.dart';
@@ -30,6 +40,8 @@ class MachineListScreen extends StatefulWidget {
     required this.repository,
     required this.user,
     required this.onLogout,
+    required this.currentLocale,
+    required this.onLocaleChanged,
     required this.shouldAutoOpenCustomerScreen,
     required this.onCustomerScreenAutoOpened,
   });
@@ -37,6 +49,8 @@ class MachineListScreen extends StatefulWidget {
   final PosRepository repository;
   final PosUser user;
   final Future<void> Function() onLogout;
+  final Locale currentLocale;
+  final Future<void> Function(Locale locale) onLocaleChanged;
   final bool shouldAutoOpenCustomerScreen;
   final VoidCallback onCustomerScreenAutoOpened;
 
@@ -48,7 +62,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
   Timer? _refreshTimer;
   final Map<int, String> _lastKnownStatusByMachineId = {};
   final Set<int> _autoNotifiedCompletionOrderIds = <int>{};
-  List<Machine> _machines = const [];
   List<InventoryRestockRequest> _pendingRestockRequests = const [];
   List<InventoryRestockRequest> _approvedRestockRequests = const [];
   bool _loading = true;
@@ -106,14 +119,14 @@ class _MachineListScreenState extends State<MachineListScreen> {
   }
 
   Future<void> _openCustomerDisplay() async {
-    final launched = await openExternalUrl(AppRoutes.customerDisplayUri());
+    final launched = await CustomerDisplayLauncher.open();
     if (!mounted) {
       return;
     }
     if (!launched) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open the customer screen window.'),
+        SnackBar(
+          content: Text(context.l10n.openCustomerScreenError),
         ),
       );
     }
@@ -154,9 +167,9 @@ class _MachineListScreenState extends State<MachineListScreen> {
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           duration: const Duration(seconds: 4),
-          backgroundColor: const Color(0xFF0E7490),
+          backgroundColor: AppColors.brandPrimary,
           content: Text(
-            'Store operator ready. Track machines, pickups, maintenance, and approvals from this dashboard.',
+            context.l10n.operatorReady,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -207,7 +220,6 @@ class _MachineListScreenState extends State<MachineListScreen> {
       return;
     }
     setState(() {
-      _machines = machines;
       _pendingRestockRequests = pendingRestockRequests;
       _approvedRestockRequests = approvedRestockRequests;
       _loading = false;
@@ -368,8 +380,8 @@ class _MachineListScreenState extends State<MachineListScreen> {
     }
     if (!launched) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp for cycle completion.'),
+        SnackBar(
+          content: Text(context.l10n.openWhatsappError),
         ),
       );
     }
@@ -499,6 +511,22 @@ class _MachineListScreenState extends State<MachineListScreen> {
       return;
     }
 
+    if (action.title == 'Delivery' || action.title == 'Pickup Desk') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => DeliveryPickupScreen(
+            repository: widget.repository,
+            user: widget.user,
+            initialTab: action.title == 'Delivery'
+                ? DeliveryPickupInitialTab.delivery
+                : DeliveryPickupInitialTab.pickup,
+          ),
+        ),
+      );
+      _loadMachines(showLoading: false);
+      return;
+    }
+
     _showFeatureMessage(action.title, action.description);
   }
 
@@ -554,6 +582,20 @@ class _MachineListScreenState extends State<MachineListScreen> {
         iconType: ManagerOptionIconType.customerScreen,
       ),
       _ManagerAction(
+        title: 'Delivery',
+        shortTitle: 'Delivery',
+        description:
+            'Schedule home delivery, dispatch orders, and confirm delivered loads.',
+        iconType: ManagerOptionIconType.delivery,
+      ),
+      _ManagerAction(
+        title: 'Pickup Desk',
+        shortTitle: 'Pickup',
+        description:
+            'Monitor ready loads, remind customers, and close pickup handovers.',
+        iconType: ManagerOptionIconType.pickup,
+      ),
+      _ManagerAction(
         title: 'Reports',
         shortTitle: 'Reports',
         description:
@@ -584,26 +626,52 @@ class _MachineListScreenState extends State<MachineListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final actions = _managerActions();
-    final availableCount =
-        _machines.where((machine) => machine.isAvailable).length;
-    final activeCount = _machines.where((machine) => machine.isInUse).length;
-    final readyCount =
-        _machines.where((machine) => machine.isReadyForPickup).length;
-    final maintenanceCount = _machines
-        .where((machine) => machine.status == MachineStatus.maintenance)
-        .length;
 
     return Scaffold(
       appBar: AppBar(
+        title: Text(l10n.appTitle),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: l10n.language,
+            onSelected: (value) => widget.onLocaleChanged(Locale(value)),
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'en',
+                child: Text(l10n.english),
+              ),
+              PopupMenuItem<String>(
+                value: 'ar',
+                child: Text(l10n.arabic),
+              ),
+              PopupMenuItem<String>(
+                value: 'th',
+                child: Text(l10n.thai),
+              ),
+              PopupMenuItem<String>(
+                value: 'hi',
+                child: Text(l10n.hindi),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.language_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Text(l10n.languageName(widget.currentLocale.languageCode)),
+                ],
+              ),
+            ),
+          ),
           TextButton(
             onPressed: _openHistory,
-            child: const Text('Order History'),
+            child: Text(l10n.orderHistory),
           ),
           TextButton(
             onPressed: widget.onLogout,
-            child: const Text('Log Out'),
+            child: Text(l10n.logout),
           ),
         ],
       ),
@@ -612,369 +680,152 @@ class _MachineListScreenState extends State<MachineListScreen> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0E7490), Color(0xFF1F9CB4)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x290E7490),
-                        blurRadius: 24,
-                        offset: Offset(0, 14),
-                      ),
-                    ],
-                  ),
-                  child: Wrap(
-                    runSpacing: 16,
-                    spacing: 16,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Store Manager Home',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Every major store control is available from this dashboard, with machines, customer handling, reporting, and day-end operations in one view.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _SummaryPill(
-                            label: 'Available',
-                            value: '$availableCount',
-                            accent: const Color(0xFF6FE0F4),
-                          ),
-                          _SummaryPill(
-                            label: 'Running',
-                            value: '$activeCount',
-                            accent: const Color(0xFFFFC57A),
-                          ),
-                          _SummaryPill(
-                            label: 'Pickup',
-                            value: '$readyCount',
-                            accent: const Color(0xFF88E0B8),
-                          ),
-                          _SummaryPill(
-                            label: 'Maintenance',
-                            value: '$maintenanceCount',
-                            accent: const Color(0xFFFF8C8C),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
                 if (_pendingRestockRequests.isNotEmpty) ...[
-                  Text(
-                    'Restock Requests',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Inventory-generated restock orders appear here for operator approval and remarks before purchasing picks them up.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF4B6475),
-                        ),
-                  ),
-                  const SizedBox(height: 14),
-                  ..._pendingRestockRequests.map(
-                    (request) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          request.itemName,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFD78B2E)
-                                          .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Text(
-                                      'Pending Approval',
-                                      style: TextStyle(
-                                        color: Color(0xFFD78B2E),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 8,
-                                children: [
-                                  _RequestMeta(
-                                    label: 'Requested Qty',
+                  DashboardSection(
+                    title: l10n.restockRequests,
+                    description: l10n.restockRequestsDescription,
+                    child: Column(
+                      children: _pendingRestockRequests
+                          .map(
+                            (request) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _RestockRequestCard(
+                                title: request.itemName,
+                                subtitle:
+                                    '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
+                                statusLabel: l10n.pendingApproval,
+                                statusColor: const Color(0xFFD78B2E),
+                                notes: request.requestNotes == null ||
+                                        request.requestNotes!.isEmpty
+                                    ? null
+                                    : '${l10n.requestNote}: ${request.requestNotes!}',
+                                metadata: [
+                                  _SectionMetaData(
+                                    label: l10n.requestedQty,
                                     value:
                                         '${request.requestedQuantity} ${request.unit}',
                                   ),
-                                  _RequestMeta(
-                                    label: 'Supplier',
-                                    value: request.supplier ?? 'Unassigned',
+                                  _SectionMetaData(
+                                    label: l10n.supplier,
+                                    value: request.supplier ?? l10n.unassigned,
                                   ),
-                                  _RequestMeta(
-                                    label: 'Branch / Location',
+                                  _SectionMetaData(
+                                    label: l10n.branchLocation,
                                     value:
                                         '${request.branch} / ${request.location}',
                                   ),
-                                  _RequestMeta(
-                                    label: 'Requested By',
-                                    value: request.requestedByName ?? 'System',
+                                  _SectionMetaData(
+                                    label: l10n.requestedBy,
+                                    value:
+                                        request.requestedByName ?? l10n.system,
                                   ),
-                                  _RequestMeta(
-                                    label: 'Created',
+                                  _SectionMetaData(
+                                    label: l10n.created,
                                     value: MaterialLocalizations.of(context)
                                         .formatShortDate(request.createdAt),
                                   ),
                                 ],
-                              ),
-                              if (request.requestNotes != null &&
-                                  request.requestNotes!.isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Request note: ${request.requestNotes!}',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
-                              const SizedBox(height: 16),
-                              FilledButton.icon(
-                                onPressed:
+                                action: FilledButton.icon(
+                                  onPressed: _approvingRestockRequestId ==
+                                          request.id
+                                      ? null
+                                      : () => _approveRestockRequest(request),
+                                  icon: const Icon(Icons.approval_outlined),
+                                  label: Text(
                                     _approvingRestockRequestId == request.id
-                                        ? null
-                                        : () => _approveRestockRequest(request),
-                                icon: const Icon(Icons.approval_outlined),
-                                label: Text(
-                                  _approvingRestockRequestId == request.id
-                                      ? 'Approving...'
-                                      : 'Approve With Remarks',
+                                        ? l10n.approving
+                                        : l10n.approveWithRemarks,
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
                   const SizedBox(height: 28),
                 ],
                 if (_approvedRestockRequests.isNotEmpty) ...[
-                  Text(
-                    'In Procurement',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'These inventory orders were approved on the operator screen and are now waiting to be marked as procured once stock arrives.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF4B6475),
-                        ),
-                  ),
-                  const SizedBox(height: 14),
-                  ..._approvedRestockRequests.map(
-                    (request) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          request.itemName,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1E7C93)
-                                          .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: const Text(
-                                      'In Procurement',
-                                      style: TextStyle(
-                                        color: Color(0xFF1E7C93),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 8,
-                                children: [
-                                  _RequestMeta(
+                  DashboardSection(
+                    title: l10n.inProcurement,
+                    description: l10n.inProcurementDescription,
+                    child: Column(
+                      children: _approvedRestockRequests
+                          .map(
+                            (request) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _RestockRequestCard(
+                                title: request.itemName,
+                                subtitle:
+                                    '${request.requestNumber} • ${request.itemSku} • ${request.itemCategory}',
+                                statusLabel: l10n.inProcurement,
+                                statusColor: const Color(0xFF1E7C93),
+                                notes: (request.operatorRemarks ?? '')
+                                        .trim()
+                                        .isEmpty
+                                    ? null
+                                    : 'Operator remarks: ${request.operatorRemarks!}',
+                                metadata: [
+                                  _SectionMetaData(
                                     label: 'Approved Qty',
                                     value:
                                         '${request.requestedQuantity} ${request.unit}',
                                   ),
-                                  _RequestMeta(
+                                  _SectionMetaData(
                                     label: 'Supplier',
                                     value: request.supplier ?? 'Unassigned',
                                   ),
-                                  _RequestMeta(
+                                  _SectionMetaData(
                                     label: 'Branch / Location',
                                     value:
                                         '${request.branch} / ${request.location}',
                                   ),
-                                  _RequestMeta(
+                                  _SectionMetaData(
                                     label: 'Approved By',
                                     value: request.approvedByName ??
                                         widget.user.displayName,
                                   ),
                                 ],
-                              ),
-                              if ((request.operatorRemarks ?? '')
-                                  .trim()
-                                  .isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Operator remarks: ${request.operatorRemarks!}',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                action: FilledButton.icon(
+                                  onPressed: _markingProcuredRestockRequestId ==
+                                          request.id
+                                      ? null
+                                      : () => _markRestockRequestProcured(
+                                            request,
+                                          ),
+                                  icon: const Icon(Icons.inventory_2_outlined),
+                                  label: Text(
+                                    _markingProcuredRestockRequestId ==
+                                            request.id
+                                        ? 'Updating Stock...'
+                                        : 'Mark Procured',
+                                  ),
                                 ),
-                              ],
-                              const SizedBox(height: 16),
-                              FilledButton.icon(
-                                onPressed: _markingProcuredRestockRequestId ==
-                                        request.id
-                                    ? null
-                                    : () =>
-                                        _markRestockRequestProcured(request),
-                                icon: const Icon(Icons.inventory_2_outlined),
-                                label: Text(
-                                  _markingProcuredRestockRequestId == request.id
-                                      ? 'Updating Stock...'
-                                      : 'Mark Procured',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-                Text(
-                  'Manager Options',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Store functions are grouped in compact rows of four.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF4B6475),
-                      ),
-                ),
-                const SizedBox(height: 14),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    const spacing = 8.0;
-                    final columns = constraints.maxWidth < 720 ? 2 : 4;
-                    final cardWidth =
-                        (constraints.maxWidth - (spacing * (columns - 1))) /
-                            columns;
-
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children: actions
-                          .map(
-                            (action) => SizedBox(
-                              width: cardWidth,
-                              child: _ManagerActionCard(
-                                action: action,
-                                onTap: () => _handleManagerAction(action),
                               ),
                             ),
                           )
                           .toList(),
-                    );
-                  },
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                ],
+                DashboardSection(
+                  title: l10n.managerOptions,
+                  description: l10n.managerOptionsDescription,
+                  child: DashboardWrapGrid(
+                    spacing: 8,
+                    runSpacing: 8,
+                    minChildWidth: 150,
+                    maxColumns: 4,
+                    children: actions
+                        .map(
+                          (action) => _ManagerActionCard(
+                            action: action,
+                            onTap: () => _handleManagerAction(action),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ],
             ),
@@ -1015,8 +866,8 @@ class _ManagerActionCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE0EAF0)),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderSubtle),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x120F172A),
@@ -1035,7 +886,7 @@ class _ManagerActionCard extends StatelessWidget {
                   height: 68,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF6FAFC),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   alignment: Alignment.center,
                   child: ManagerOptionIcon(
@@ -1047,7 +898,7 @@ class _ManagerActionCard extends StatelessWidget {
                 SizedBox(
                   width: 112,
                   child: Text(
-                    action.shortTitle,
+                    context.l10n.managerActionShortTitle(action.title),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     softWrap: false,
@@ -1056,7 +907,7 @@ class _ManagerActionCard extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           height: 1.1,
                           letterSpacing: 0,
-                          color: const Color(0xFF223746),
+                          color: AppColors.textStrong,
                         ),
                   ),
                 ),
@@ -1069,89 +920,89 @@ class _ManagerActionCard extends StatelessWidget {
   }
 }
 
-class _SummaryPill extends StatelessWidget {
-  const _SummaryPill({
-    required this.label,
-    required this.value,
-    required this.accent,
+class _RestockRequestCard extends StatelessWidget {
+  const _RestockRequestCard({
+    required this.title,
+    required this.subtitle,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.metadata,
+    required this.action,
+    this.notes,
   });
 
-  final String label;
-  final String value;
-  final Color accent;
+  final String title;
+  final String subtitle;
+  final String statusLabel;
+  final Color statusColor;
+  final List<_SectionMetaData> metadata;
+  final Widget action;
+  final String? notes;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: accent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          Row(
             children: [
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.86),
-                    ),
+              StatusBadge(
+                label: statusLabel,
+                color: statusColor,
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: metadata
+                .map(
+                  (item) => MetaPill(
+                    label: item.label,
+                    value: item.value,
+                  ),
+                )
+                .toList(),
+          ),
+          if ((notes ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              notes!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          action,
         ],
       ),
     );
   }
 }
 
-class _RequestMeta extends StatelessWidget {
-  const _RequestMeta({
+class _SectionMetaData {
+  const _SectionMetaData({
     required this.label,
     required this.value,
   });
 
   final String label;
   final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleSmall),
-        ],
-      ),
-    );
-  }
 }

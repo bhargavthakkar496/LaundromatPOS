@@ -1,3 +1,5 @@
+import 'garment_item.dart';
+
 class ActiveOrderSessionStage {
   static const draft = 'DRAFT';
   static const booked = 'BOOKED';
@@ -26,6 +28,7 @@ class ActiveOrderSession {
     this.confirmedBy,
     this.orderId,
     this.paymentReference,
+    this.garmentItems = const [],
   });
 
   final String customerName;
@@ -42,6 +45,7 @@ class ActiveOrderSession {
   final String? confirmedBy;
   final int? orderId;
   final String? paymentReference;
+  final List<GarmentItem> garmentItems;
 
   bool get includesWashing => selectedServices.contains(LaundryService.washing);
   bool get includesDrying => selectedServices.contains(LaundryService.drying);
@@ -66,6 +70,7 @@ class ActiveOrderSession {
     Object? confirmedBy = _sentinel,
     Object? orderId = _sentinel,
     Object? paymentReference = _sentinel,
+    List<GarmentItem>? garmentItems,
   }) {
     return ActiveOrderSession(
       customerName: customerName ?? this.customerName,
@@ -94,6 +99,7 @@ class ActiveOrderSession {
       paymentReference: identical(paymentReference, _sentinel)
           ? this.paymentReference
           : paymentReference as String?,
+      garmentItems: garmentItems ?? this.garmentItems,
     );
   }
 
@@ -113,6 +119,7 @@ class ActiveOrderSession {
       'confirmedBy': confirmedBy,
       'orderId': orderId,
       'paymentReference': paymentReference,
+      'garmentItems': garmentItems.map((item) => item.toJson()).toList(),
     };
   }
 
@@ -134,6 +141,9 @@ class ActiveOrderSession {
       confirmedBy: json['confirmedBy'] as String?,
       orderId: json['orderId'] as int?,
       paymentReference: json['paymentReference'] as String?,
+      garmentItems: (json['garmentItems'] as List<dynamic>? ?? const [])
+          .map((item) => GarmentItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

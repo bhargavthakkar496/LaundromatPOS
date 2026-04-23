@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/active_order_session.dart';
 import '../models/customer.dart';
 import '../models/customer_profile.dart';
+import '../models/delivery_task.dart';
+import '../models/garment_item.dart';
 import '../models/inventory.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
@@ -16,6 +18,7 @@ import '../models/machine_reservation.dart';
 import '../models/order.dart';
 import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
+import '../models/pickup_task.dart';
 import '../models/pos_user.dart';
 import '../models/pricing.dart';
 import '../models/refund_request.dart';
@@ -37,6 +40,8 @@ class DemoPosRepository implements PosRepository {
   static const _pricingCampaignsKey = 'pricing_campaigns_v1';
   static const _maintenanceRecordsKey = 'maintenance_records_v1';
   static const _refundRequestsKey = 'refund_requests_v1';
+  static const _deliveryTasksKey = 'delivery_tasks_v1';
+  static const _pickupTasksKey = 'pickup_tasks_v1';
   static const _dayEndCheckoutsKey = 'day_end_checkouts_v1';
   static const _staffMembersKey = 'staff_members_v1';
   static const _staffShiftsKey = 'staff_shifts_v1';
@@ -64,6 +69,8 @@ class DemoPosRepository implements PosRepository {
   final List<PricingCampaign> _pricingCampaigns = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   final List<RefundRequest> _refundRequests = [];
+  final List<DeliveryTask> _deliveryTasks = [];
+  final List<PickupTask> _pickupTasks = [];
   final List<DayEndCheckout> _dayEndCheckouts = [];
   final List<StaffMember> _staffMembers = [];
   final List<StaffShift> _staffShifts = [];
@@ -1040,6 +1047,7 @@ class DemoPosRepository implements PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -1065,12 +1073,14 @@ class DemoPosRepository implements PosRepository {
         .any((machine) => machine.status == MachineStatus.maintenance)) {
       throw StateError('One or more assigned machines are under maintenance.');
     }
-    final amount = _buildPricingQuote(
-      washer: washer,
-      dryer: dryer,
-      ironingStation: ironingStation,
-      selectedServices: selectedServices,
-    ).finalTotal;
+    final amount = garmentItems.isNotEmpty
+        ? garmentItems.fold<double>(0, (sum, item) => sum + item.lineTotal)
+        : _buildPricingQuote(
+            washer: washer,
+            dryer: dryer,
+            ironingStation: ironingStation,
+            selectedServices: selectedServices,
+          ).finalTotal;
     final order = Order(
       id: ++_orderCounter,
       machineId: primaryMachine.id,
@@ -1090,6 +1100,7 @@ class DemoPosRepository implements PosRepository {
       washOption: washOption,
       dryerMachineId: dryer?.id,
       ironingMachineId: ironingStation?.id,
+      garmentItems: garmentItems,
     );
     _orders.insert(0, order);
 
@@ -1132,6 +1143,7 @@ class DemoPosRepository implements PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -1152,6 +1164,7 @@ class DemoPosRepository implements PosRepository {
       paymentMethod: paymentMethod,
       stage: ActiveOrderSessionStage.draft,
       createdAt: DateTime.now(),
+      garmentItems: garmentItems,
     );
     await _preferences.setString(
       _activeOrderSessionKey,
@@ -1189,6 +1202,7 @@ class DemoPosRepository implements PosRepository {
       customerPhone: session.customerPhone,
       loadSizeKg: session.loadSizeKg,
       selectedServices: session.selectedServices,
+      garmentItems: session.garmentItems,
       washOption: session.washOption,
       washer: washer,
       dryer: dryer,
@@ -1886,12 +1900,23 @@ class DemoPosRepository implements PosRepository {
     if (machineIndex == -1) {
       return;
     }
+    final orderId = _machines[machineIndex].currentOrderId;
     _machines[machineIndex] = _machines[machineIndex].copyWith(
       status: MachineStatus.available,
       currentOrderId: null,
       cycleStartedAt: null,
       cycleEndsAt: null,
     );
+    if (orderId != null) {
+      final pickupTaskIndex =
+          _pickupTasks.indexWhere((item) => item.orderId == orderId);
+      if (pickupTaskIndex >= 0) {
+        _pickupTasks[pickupTaskIndex] = _pickupTasks[pickupTaskIndex].copyWith(
+          status: PickupTaskStatus.pickedUp,
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
     await _persistState();
     await _machineIntegration.clearMachine(machine: _machines[machineIndex]);
   }
@@ -2148,6 +2173,70 @@ class DemoPosRepository implements PosRepository {
     _refundRequests[requestIndex] = updated;
     await _persistState();
     return updated;
+  }
+
+  @override
+  Future<List<DeliveryTask>> getDeliveryTasks() async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    final tasks = [..._deliveryTasks]..sort((left, right) {
+        final leftUpdated =
+            left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final rightUpdated =
+            right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return rightUpdated.compareTo(leftUpdated);
+      });
+    return tasks;
+  }
+
+  @override
+  Future<DeliveryTask> saveDeliveryTask({
+    required DeliveryTask task,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    final normalized = task.copyWith(updatedAt: DateTime.now());
+    final index =
+        _deliveryTasks.indexWhere((item) => item.orderId == task.orderId);
+    if (index >= 0) {
+      _deliveryTasks[index] = normalized;
+    } else {
+      _deliveryTasks.add(normalized);
+    }
+    await _persistState();
+    return normalized;
+  }
+
+  @override
+  Future<List<PickupTask>> getPickupTasks() async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    final tasks = [..._pickupTasks]..sort((left, right) {
+        final leftUpdated =
+            left.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final rightUpdated =
+            right.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return rightUpdated.compareTo(leftUpdated);
+      });
+    return tasks;
+  }
+
+  @override
+  Future<PickupTask> savePickupTask({
+    required PickupTask task,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await _loadPersistedState();
+    final normalized = task.copyWith(updatedAt: DateTime.now());
+    final index =
+        _pickupTasks.indexWhere((item) => item.orderId == task.orderId);
+    if (index >= 0) {
+      _pickupTasks[index] = normalized;
+    } else {
+      _pickupTasks.add(normalized);
+    }
+    await _persistState();
+    return normalized;
   }
 
   @override
@@ -2483,6 +2572,8 @@ class DemoPosRepository implements PosRepository {
       _maintenanceRecordsKey,
     );
     final refundRequestsJson = await _preferences.getString(_refundRequestsKey);
+    final deliveryTasksJson = await _preferences.getString(_deliveryTasksKey);
+    final pickupTasksJson = await _preferences.getString(_pickupTasksKey);
     final dayEndCheckoutsJson = await _preferences.getString(
       _dayEndCheckoutsKey,
     );
@@ -2517,6 +2608,12 @@ class DemoPosRepository implements PosRepository {
     _refundRequests
       ..clear()
       ..addAll(_decodeRefundRequests(refundRequestsJson));
+    _deliveryTasks
+      ..clear()
+      ..addAll(_decodeDeliveryTasks(deliveryTasksJson));
+    _pickupTasks
+      ..clear()
+      ..addAll(_decodePickupTasks(pickupTasksJson));
     _dayEndCheckouts
       ..clear()
       ..addAll(_decodeDayEndCheckouts(dayEndCheckoutsJson));
@@ -2603,6 +2700,8 @@ class DemoPosRepository implements PosRepository {
                 'washOption': order.washOption,
                 'dryerMachineId': order.dryerMachineId,
                 'ironingMachineId': order.ironingMachineId,
+                'garmentItems':
+                    order.garmentItems.map((item) => item.toJson()).toList(),
               },
             )
             .toList(),
@@ -2740,6 +2839,14 @@ class DemoPosRepository implements PosRepository {
       ),
     );
     await _preferences.setString(
+      _deliveryTasksKey,
+      jsonEncode(_deliveryTasks.map((item) => item.toJson()).toList()),
+    );
+    await _preferences.setString(
+      _pickupTasksKey,
+      jsonEncode(_pickupTasks.map((item) => item.toJson()).toList()),
+    );
+    await _preferences.setString(
       _dayEndCheckoutsKey,
       jsonEncode(
         _dayEndCheckouts.map((checkout) => checkout.toJson()).toList(),
@@ -2834,6 +2941,13 @@ class DemoPosRepository implements PosRepository {
             washOption: item['washOption'] as String?,
             dryerMachineId: item['dryerMachineId'] as int?,
             ironingMachineId: item['ironingMachineId'] as int?,
+            garmentItems:
+                (item['garmentItems'] as List<dynamic>? ?? const [])
+                    .map(
+                      (entry) =>
+                          GarmentItem.fromJson(entry as Map<String, dynamic>),
+                    )
+                    .toList(),
           ),
         )
         .toList();
@@ -3005,6 +3119,26 @@ class DemoPosRepository implements PosRepository {
         .map(
           (item) => DayEndCheckout.fromJson(item as Map<String, dynamic>),
         )
+        .toList();
+  }
+
+  List<DeliveryTask> _decodeDeliveryTasks(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => DeliveryTask.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<PickupTask> _decodePickupTasks(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => PickupTask.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 

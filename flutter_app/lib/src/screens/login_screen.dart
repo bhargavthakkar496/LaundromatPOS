@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/auth_session.dart';
 import 'customer_profile_screen.dart';
 
@@ -9,10 +10,14 @@ class LoginScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.onLoginSuccess,
+    required this.currentLocale,
+    required this.onLocaleChanged,
   });
 
   final PosRepository repository;
   final Future<void> Function(AuthSession session) onLoginSuccess;
+  final Locale currentLocale;
+  final Future<void> Function(Locale locale) onLocaleChanged;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -52,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (session == null) {
       setState(() {
-        _message = 'Login failed. Check your credentials or backend connection.';
+        _message = context.l10n.loginFailed;
       });
       return;
     }
@@ -62,6 +67,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
     return Scaffold(
       body: Center(
         child: Padding(
@@ -75,29 +82,76 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'WashPOS',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.appTitle,
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: l10n.language,
+                          onSelected: (value) =>
+                              widget.onLocaleChanged(Locale(value)),
+                          itemBuilder: (context) => [
+                            PopupMenuItem<String>(
+                              value: 'en',
+                              child: Text(l10n.english),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'ar',
+                              child: Text(l10n.arabic),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'th',
+                              child: Text(l10n.thai),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'hi',
+                              child: Text(l10n.hindi),
+                            ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.language_outlined, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  l10n.languageName(
+                                    widget.currentLocale.languageCode,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Flutter scaffold for the current Android demo flow.',
+                      l10n.loginSubtitle,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 24),
                     TextField(
                       controller: _usernameController,
-                      decoration: const InputDecoration(labelText: 'Username'),
+                      decoration: InputDecoration(labelText: l10n.username),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _pinController,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: 'PIN'),
+                      decoration: InputDecoration(labelText: l10n.pin),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _message ?? 'Use your operator credentials.',
+                      _message ?? l10n.loginHint,
                       style: TextStyle(
                         color: _message == null
                             ? Colors.black54
@@ -107,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: _submitting ? null : _login,
-                      child: Text(_submitting ? 'Signing in...' : 'Login'),
+                      child: Text(_submitting ? l10n.signingIn : l10n.login),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
@@ -122,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               );
                             },
-                      child: const Text('Customer Profile & History'),
+                      child: Text(l10n.customerProfileHistory),
                     ),
                   ],
                 ),

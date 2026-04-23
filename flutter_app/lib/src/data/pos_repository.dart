@@ -2,6 +2,8 @@ import '../models/active_order_session.dart';
 import '../models/auth_session.dart';
 import '../models/customer.dart';
 import '../models/customer_profile.dart';
+import '../models/delivery_task.dart';
+import '../models/garment_item.dart';
 import '../models/inventory.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
@@ -11,6 +13,7 @@ import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
 import '../models/pos_user.dart';
 import '../models/pricing.dart';
+import '../models/pickup_task.dart';
 import '../models/refund_request.dart';
 import '../models/revenue.dart';
 import '../models/staff.dart';
@@ -82,6 +85,7 @@ abstract class PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -98,6 +102,7 @@ abstract class PosRepository {
     required String customerPhone,
     required int loadSizeKg,
     required List<String> selectedServices,
+    List<GarmentItem> garmentItems = const [],
     String? washOption,
     Machine? washer,
     Machine? dryer,
@@ -246,6 +251,18 @@ abstract class PosRepository {
   Future<RefundRequest?> markRefundRequestProcessed({
     required int requestId,
     String? processedByName,
+  });
+
+  Future<List<DeliveryTask>> getDeliveryTasks();
+
+  Future<DeliveryTask> saveDeliveryTask({
+    required DeliveryTask task,
+  });
+
+  Future<List<PickupTask>> getPickupTasks();
+
+  Future<PickupTask> savePickupTask({
+    required PickupTask task,
   });
 
   Future<List<DayEndCheckout>> getDayEndCheckouts({

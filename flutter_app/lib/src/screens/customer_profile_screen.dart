@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/customer_profile.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
@@ -96,7 +97,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Customer Lookup')),
+      appBar: AppBar(title: Text(context.l10n.customerLookup)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

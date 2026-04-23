@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
@@ -303,7 +304,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Maintenance Desk'),
+        title: Text(context.l10n.maintenance),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),

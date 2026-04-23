@@ -16,14 +16,9 @@ class DemoMachineIntegrationService implements MachineIntegrationService {
   @override
   Future<List<Machine>> reconcileMachines(List<Machine> machines) async {
     final now = DateTime.now();
-    return machines.map((machine) {
-      if (machine.status == MachineStatus.inUse &&
-          machine.cycleEndsAt != null &&
-          !machine.cycleEndsAt!.isAfter(now)) {
-        return machine.copyWith(status: MachineStatus.readyForPickup);
-      }
-      return machine;
-    }).toList();
+    return machines
+        .map((machine) => machine.normalizedCycleStatus(now: now))
+        .toList();
   }
 
   @override

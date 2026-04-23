@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
@@ -285,7 +286,7 @@ class _OperatorPaymentScreenState extends State<OperatorPaymentScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operator Payments'),
+        title: Text(context.l10n.operatorPayments),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),

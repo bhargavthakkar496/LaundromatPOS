@@ -56,10 +56,13 @@ class SunmiMachineIntegrationService implements MachineIntegrationService {
 
   @override
   Future<List<Machine>> reconcileMachines(List<Machine> machines) async {
-    if (_nativeAvailable) {
-      return machines;
-    }
-    return _fallback.reconcileMachines(machines);
+    final reconciled = _nativeAvailable
+        ? machines
+        : await _fallback.reconcileMachines(machines);
+    final now = DateTime.now();
+    return reconciled
+        .map((machine) => machine.normalizedCycleStatus(now: now))
+        .toList();
   }
 
   @override

@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
+import '../models/garment_item.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
 import '../models/order_history_item.dart';
@@ -33,16 +36,32 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   static const _washOptions = ['Gentle Wash', 'Specific Wash'];
   static const _paymentMethods = ['UPI QR', 'Card', 'Cash'];
   static const _loadSizes = [8, 9, 10, 11, 12, 14, 15];
+  static const _garmentServiceRates = <String, double>{
+    LaundryService.washing: 45,
+    LaundryService.drying: 30,
+    LaundryService.ironing: 18,
+  };
   static const _historyStatusOptions = [
     'All Statuses',
     OrderStatus.booked,
     OrderStatus.inProgress,
     OrderStatus.completed,
+    OrderStatus.readyForPickup,
+    OrderStatus.delivered,
+  ];
+  static const _workflowActions = [
+    'Receive garments and capture customer name, mobile number, and service requirements.',
+    'Build a per-piece garment manifest with wash type, dry duration, ironing, and quantity.',
+    'Calculate invoice total and generate the order id for the customer.',
+    'Print one taffeta tag per garment piece with text details and QR-ready tag data.',
+    'Scan tags during washing, drying, and ironing to update piece-level progress.',
+    'Reconcile all tagged garments before marking the order ready for pickup or delivery.',
   ];
 
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
   final _customerPhoneController = TextEditingController();
+  final _barcodeController = TextEditingController();
   String _selectedView = 'Book Order';
   String _washOption = _washOptions.first;
   String _paymentMethod = _paymentMethods.first;
@@ -62,6 +81,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   List<Machine> _washers = const [];
   List<Machine> _dryers = const [];
   List<Machine> _ironingStations = const [];
+  final List<_ScannedLaundryTag> _scannedTags = [];
+  final List<GarmentItem> _garmentItems = [];
   ActiveOrderSession? _activeSession;
   Timer? _sessionTimer;
 
@@ -73,7 +94,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   bool get _includesIroning =>
       _selectedServices.contains(LaundryService.ironing);
 
+  bool get _hasGarmentItems => _garmentItems.isNotEmpty;
+
+  Set<String> get _garmentSelectedServices =>
+      _garmentItems.expand((item) => item.selectedServices).toSet();
+
+  int get _garmentPieceCount =>
+      _garmentItems.fold<int>(0, (sum, item) => sum + item.quantity);
+
+  double get _garmentManifestTotal => _garmentItems.fold<double>(
+        0,
+        (sum, item) => sum + item.lineTotal,
+      );
+
   double get _estimatedAmount {
+    if (_hasGarmentItems) {
+      return _garmentManifestTotal;
+    }
     return [
       _includesWashing ? _selectedWasher?.price : null,
       _includesDrying ? _selectedDryer?.price : null,
@@ -100,7 +137,31 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     _sessionTimer?.cancel();
     _customerNameController.dispose();
     _customerPhoneController.dispose();
+    _barcodeController.dispose();
     super.dispose();
+  }
+
+  List<Machine> _uniqueMachinesById(Iterable<Machine> machines) {
+    final uniqueById = <int, Machine>{};
+    for (final machine in machines) {
+      uniqueById[machine.id] = machine;
+    }
+    return uniqueById.values.toList();
+  }
+
+  Machine? _selectionFromList(List<Machine> machines, Machine? selected) {
+    if (machines.isEmpty) {
+      return null;
+    }
+    if (selected == null) {
+      return machines.first;
+    }
+    for (final machine in machines) {
+      if (machine.id == selected.id) {
+        return machine;
+      }
+    }
+    return machines.first;
   }
 
   Future<void> _loadMachines() async {
@@ -108,16 +169,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     if (!mounted) {
       return;
     }
+    final washers = _uniqueMachinesById(
+      machines.where((machine) => machine.type == 'Washer'),
+    );
+    final dryers = _uniqueMachinesById(
+      machines.where((machine) => machine.type == 'Dryer'),
+    );
+    final ironingStations = _uniqueMachinesById(
+      machines.where((machine) => machine.type == Machine.ironingStationType),
+    );
     setState(() {
-      _washers = machines.where((machine) => machine.type == 'Washer').toList();
-      _dryers = machines.where((machine) => machine.type == 'Dryer').toList();
-      _ironingStations = machines
-          .where((machine) => machine.type == Machine.ironingStationType)
-          .toList();
-      _selectedWasher ??= _washers.isEmpty ? null : _washers.first;
-      _selectedDryer ??= _dryers.isEmpty ? null : _dryers.first;
-      _selectedIroningStation ??=
-          _ironingStations.isEmpty ? null : _ironingStations.first;
+      _washers = washers;
+      _dryers = dryers;
+      _ironingStations = ironingStations;
+      _selectedWasher = _selectionFromList(_washers, _selectedWasher);
+      _selectedDryer = _selectionFromList(_dryers, _selectedDryer);
+      _selectedIroningStation =
+          _selectionFromList(_ironingStations, _selectedIroningStation);
     });
   }
 
@@ -152,7 +220,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         left.paymentReference == right.paymentReference &&
         left.confirmedBy == right.confirmedBy &&
         left.customerName == right.customerName &&
-        left.customerPhone == right.customerPhone;
+        left.customerPhone == right.customerPhone &&
+        left.garmentItems.length == right.garmentItems.length;
   }
 
   Future<void> _submitOrderDraft() async {
@@ -186,6 +255,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       customerPhone: _customerPhoneController.text.trim(),
       loadSizeKg: _loadSizeKg,
       selectedServices: _selectedServices.toList(),
+      garmentItems: List<GarmentItem>.from(_garmentItems),
       washOption: requiresWashing ? _washOption : null,
       washer: requiresWashing ? _selectedWasher : null,
       dryer: requiresDrying ? _selectedDryer : null,
@@ -211,6 +281,317 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  int _nearestLoadSize(int inputKg) {
+    var nearest = _loadSizes.first;
+    var bestDistance = (nearest - inputKg).abs();
+    for (final size in _loadSizes.skip(1)) {
+      final distance = (size - inputKg).abs();
+      if (distance < bestDistance) {
+        nearest = size;
+        bestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  double _serviceRate(String service) => _garmentServiceRates[service] ?? 0;
+
+  void _syncSelectedServicesFromGarments() {
+    if (_garmentItems.isEmpty) {
+      return;
+    }
+    _selectedServices
+      ..clear()
+      ..addAll(_garmentSelectedServices);
+  }
+
+  void _applyScannedTag(_ScannedLaundryTag tag) {
+    final existingIndex = _scannedTags.indexWhere(
+      (entry) => entry.deduplicationKey == tag.deduplicationKey,
+    );
+    if (existingIndex != -1) {
+      _showFormMessage(
+          'Tag ${tag.displayLabel} is already in this order draft.');
+      return;
+    }
+
+    final updatedServices = {..._selectedServices, ...tag.selectedServices};
+
+    setState(() {
+      _scannedTags.add(tag);
+      _garmentItems.add(
+        _garmentItemFromTag(
+          tag,
+          fallbackServices: updatedServices.isEmpty
+              ? const {LaundryService.washing}
+              : updatedServices,
+          resolveServiceRate: _serviceRate,
+        ),
+      );
+
+      if (tag.customerName != null &&
+          _customerNameController.text.trim().isEmpty) {
+        _customerNameController.text = tag.customerName!;
+      }
+      if (tag.customerPhone != null &&
+          _customerPhoneController.text.trim().isEmpty) {
+        _customerPhoneController.text = tag.customerPhone!;
+      }
+      _selectedServices
+        ..clear()
+        ..addAll(updatedServices);
+      if (tag.loadSizeKg != null) {
+        _loadSizeKg = _nearestLoadSize(tag.loadSizeKg!);
+      }
+      if (tag.washOption != null) {
+        _washOption = tag.washOption!;
+      }
+      if (tag.paymentMethod != null) {
+        _paymentMethod = tag.paymentMethod!;
+      }
+      _syncSelectedServicesFromGarments();
+    });
+
+    final appliedDetails = <String>[
+      if (tag.customerName != null) 'customer',
+      if (tag.customerPhone != null) 'phone',
+      if (tag.selectedServices.isNotEmpty) 'services',
+      if (tag.loadSizeKg != null) 'load size',
+      if (tag.washOption != null) 'wash option',
+      if (tag.paymentMethod != null) 'payment method',
+    ];
+    _showFormMessage(
+      appliedDetails.isEmpty
+          ? 'Tag ${tag.displayLabel} was recorded. No order fields were found in the barcode payload.'
+          : 'Tag ${tag.displayLabel} applied ${appliedDetails.join(', ')} to the order draft.',
+    );
+  }
+
+  void _scanBarcodeInput() {
+    final raw = _barcodeController.text.trim();
+    if (raw.isEmpty) {
+      _showFormMessage('Scan or enter a barcode first.');
+      return;
+    }
+
+    final tag = _ScannedLaundryTag.parse(
+      raw,
+      washOptions: _washOptions,
+      paymentMethods: _paymentMethods,
+    );
+    _barcodeController.clear();
+
+    if (tag == null) {
+      _showFormMessage(
+        'Barcode could not be parsed. Use JSON or WASHPOS|key=value tag format.',
+      );
+      return;
+    }
+
+    _applyScannedTag(tag);
+  }
+
+  void _clearScannedTags() {
+    setState(() {
+      _scannedTags.clear();
+      _garmentItems.clear();
+    });
+    _showFormMessage(
+        'Scanned garment tags and garment rows were cleared from this draft.');
+  }
+
+  Future<void> _addManualGarmentRow() async {
+    final garmentController = TextEditingController();
+    var quantity = 1;
+    final selectedServices = <String>{
+      if (_selectedServices.isNotEmpty) ..._selectedServices else LaundryService.washing,
+    };
+
+    final created = await showDialog<GarmentItem>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Garment Row'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: garmentController,
+                      decoration: const InputDecoration(
+                        labelText: 'Garment label',
+                        hintText: 'Example: Shirt, Saree, Trouser',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Text('Quantity'),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          onPressed: quantity > 1
+                              ? () => setDialogState(() {
+                                    quantity -= 1;
+                                  })
+                              : null,
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                        Text(
+                          '$quantity',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        IconButton(
+                          onPressed: () => setDialogState(() {
+                            quantity += 1;
+                          }),
+                          icon: const Icon(Icons.add_circle_outline),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        LaundryService.washing,
+                        LaundryService.drying,
+                        LaundryService.ironing,
+                      ]
+                          .map(
+                            (service) => FilterChip(
+                              label: Text(service),
+                              selected: selectedServices.contains(service),
+                              onSelected: (selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedServices.add(service);
+                                  } else if (selectedServices.length > 1) {
+                                    selectedServices.remove(service);
+                                  }
+                                });
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final garmentLabel = garmentController.text.trim();
+                    if (garmentLabel.isEmpty) {
+                      return;
+                    }
+                    final orderedServices = [
+                      LaundryService.washing,
+                      LaundryService.drying,
+                      LaundryService.ironing,
+                    ].where(selectedServices.contains).toList();
+                    Navigator.of(dialogContext).pop(
+                      GarmentItem(
+                        tagId:
+                            'TAG-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+                        garmentLabel: garmentLabel,
+                        quantity: quantity,
+                        selectedServices: orderedServices,
+                        unitPrice: _calculateGarmentUnitPrice(
+                          orderedServices,
+                          resolveServiceRate: _serviceRate,
+                        ),
+                        status: GarmentItemStatus.received,
+                        sourceDeduplicationKey:
+                            'MANUAL-${DateTime.now().microsecondsSinceEpoch}',
+                      ),
+                    );
+                  },
+                  child: const Text('Add Row'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    garmentController.dispose();
+
+    if (created == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _garmentItems.add(created);
+      _selectedServices
+        ..clear()
+        ..addAll(_garmentSelectedServices);
+    });
+    _showFormMessage('${created.garmentLabel} added to the garment manifest.');
+  }
+
+  void _updateGarmentQuantity(GarmentItem item, int nextQuantity) {
+    if (nextQuantity < 1) {
+      return;
+    }
+    setState(() {
+      final index = _garmentItems.indexOf(item);
+      if (index == -1) {
+        return;
+      }
+      _garmentItems[index] = item.copyWith(quantity: nextQuantity);
+    });
+  }
+
+  void _toggleGarmentService(GarmentItem item, String service) {
+    final nextServices = [...item.selectedServices];
+    if (nextServices.contains(service)) {
+      if (nextServices.length == 1) {
+        _showFormMessage('Each garment item needs at least one service.');
+        return;
+      }
+      nextServices.remove(service);
+    } else {
+      nextServices.add(service);
+    }
+
+    setState(() {
+      final index = _garmentItems.indexOf(item);
+      if (index == -1) {
+        return;
+      }
+      _garmentItems[index] = item.copyWith(
+        selectedServices: nextServices,
+        unitPrice: _calculateGarmentUnitPrice(
+          nextServices,
+          resolveServiceRate: _serviceRate,
+        ),
+      );
+      _syncSelectedServicesFromGarments();
+    });
+  }
+
+  void _removeGarmentItem(GarmentItem item) {
+    setState(() {
+      _garmentItems.remove(item);
+      _scannedTags.removeWhere(
+        (tag) => tag.deduplicationKey == item.sourceDeduplicationKey,
+      );
+      _syncSelectedServicesFromGarments();
+    });
+    _showFormMessage('${item.garmentLabel} removed from the garment list.');
   }
 
   void _toggleService(String service, bool selected) {
@@ -263,6 +644,40 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     return '$label: ${machine.name}';
   }
 
+  GarmentItem _garmentItemFromTag(
+    _ScannedLaundryTag tag, {
+    required Set<String> fallbackServices,
+    required double Function(String service) resolveServiceRate,
+  }) {
+    final services = tag.selectedServices.isEmpty
+        ? fallbackServices.toList()
+        : tag.selectedServices;
+    final calculatedUnitPrice = tag.unitPrice ??
+        _calculateGarmentUnitPrice(
+          services,
+          resolveServiceRate: resolveServiceRate,
+        );
+    return GarmentItem(
+      tagId: tag.displayLabel,
+      garmentLabel: tag.garmentName ?? 'Tagged Garment',
+      quantity: tag.quantity == null || tag.quantity! < 1 ? 1 : tag.quantity!,
+      selectedServices: services,
+      unitPrice: calculatedUnitPrice,
+      status: GarmentItemStatus.received,
+      sourceDeduplicationKey: tag.deduplicationKey,
+    );
+  }
+
+  double _calculateGarmentUnitPrice(
+    List<String> services, {
+    required double Function(String service) resolveServiceRate,
+  }) {
+    return services.fold<double>(
+      0,
+      (sum, service) => sum + resolveServiceRate(service),
+    );
+  }
+
   Widget _buildServiceSelector() {
     final services = [
       LaundryService.washing,
@@ -288,8 +703,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
               width: width,
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap:
-                    _saving ? null : () => _toggleService(service, !selected),
+                onTap: _saving || _hasGarmentItems
+                    ? null
+                    : () => _toggleService(service, !selected),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.all(18),
@@ -332,7 +748,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           ),
                           Checkbox(
                             value: selected,
-                            onChanged: _saving
+                            onChanged: _saving || _hasGarmentItems
                                 ? null
                                 : (value) => _toggleService(
                                       service,
@@ -354,6 +770,345 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           }).toList(),
         );
       },
+    );
+  }
+
+  Widget _buildBarcodeScannerCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.qr_code_scanner_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Garment Tag Scanner',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (_scannedTags.isNotEmpty)
+                TextButton.icon(
+                  onPressed: _saving ? null : _clearScannedTags,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Clear Tags'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scan the barcode on each laundry tag to prefill the order. This works well with USB or handheld barcode scanners that type into the field below.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _barcodeController,
+                  enabled: !_saving,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'Scan garment tag barcode',
+                    hintText:
+                        'Example: WASHPOS|tag=TAG-1001|customer=Ravi|phone=9876543210|services=Washing+Drying|load=10',
+                  ),
+                  onFieldSubmitted: (_) => _scanBarcodeInput(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: _saving ? null : _scanBarcodeInput,
+                icon: const Icon(Icons.document_scanner_outlined),
+                label: const Text('Apply Scan'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Supported payloads: JSON like {"customerName":"Asha","selectedServices":["Washing"]} or pipe tags like WASHPOS|customer=Asha|phone=9876543210|services=Washing+Ironing|load=8.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF4B6475),
+                ),
+          ),
+          if (_scannedTags.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _scannedTags
+                  .map(
+                    (tag) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            tag.displayLabel,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          if (tag.selectedServices.isNotEmpty)
+                            Text(
+                              'Services: ${tag.selectedServices.join(', ')}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (tag.loadSizeKg != null)
+                            Text(
+                              'Load: ${tag.loadSizeKg}kg',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (tag.customerName != null)
+                            Text(
+                              tag.customerName!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGarmentManifestCard() {
+    final serviceOptions = [
+      LaundryService.washing,
+      LaundryService.drying,
+      LaundryService.ironing,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Garment Line Items',
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scan garment tags or add rows manually. Each row becomes an editable garment entry that can later print one taffeta tag per piece.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: _saving ? null : _addManualGarmentRow,
+                icon: const Icon(Icons.add_outlined),
+                label: const Text('Add Garment Row'),
+              ),
+              if (_scannedTags.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : _clearScannedTags,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Clear Scanned Tags'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_garmentItems.isEmpty)
+            const Text(
+              'No garment rows added yet. Scan tags above or add rows manually to build a per-piece order manifest.',
+            )
+          else ...[
+            ..._garmentItems.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.garmentLabel,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Tag: ${item.tagId}',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _removeGarmentItem(item),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () => _updateGarmentQuantity(
+                                              item,
+                                              item.quantity - 1,
+                                            ),
+                                    icon:
+                                        const Icon(Icons.remove_circle_outline),
+                                  ),
+                                  Text(
+                                    '${item.quantity}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  IconButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () => _updateGarmentQuantity(
+                                              item,
+                                              item.quantity + 1,
+                                            ),
+                                    icon: const Icon(Icons.add_circle_outline),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              'Unit: INR ${item.unitPrice.toStringAsFixed(0)}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            Text(
+                              'Line total: INR ${item.lineTotal.toStringAsFixed(0)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: serviceOptions
+                              .map(
+                                (service) => FilterChip(
+                                  label: Text(
+                                    '$service (INR ${_serviceRate(service).toStringAsFixed(0)})',
+                                  ),
+                                  selected:
+                                      item.selectedServices.contains(service),
+                                  onSelected: _saving
+                                      ? null
+                                      : (_) => _toggleGarmentService(
+                                            item,
+                                            service,
+                                          ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Wrap(
+                spacing: 16,
+                runSpacing: 10,
+                children: [
+                  Text('Rows: ${_garmentItems.length}'),
+                  Text('Pieces: $_garmentPieceCount'),
+                  Text(
+                    'Manifest total: INR ${_garmentManifestTotal.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -479,6 +1234,23 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     .toList(),
           ),
           const SizedBox(height: 18),
+          if (_hasGarmentItems) ...[
+            Text(
+              'Garment manifest',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.84),
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_garmentItems.length} rows • $_garmentPieceCount pieces • INR ${_garmentManifestTotal.toStringAsFixed(0)}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           Text(
             'Load size: $_loadSizeKg kg',
             style: const TextStyle(color: Colors.white),
@@ -509,7 +1281,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Estimated order total',
+            _hasGarmentItems
+                ? 'Machine-backed checkout estimate'
+                : 'Estimated order total',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.white.withValues(alpha: 0.84),
                 ),
@@ -562,6 +1336,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         return 'Booked';
       case OrderStatus.inProgress:
         return 'In Progress';
+      case OrderStatus.readyForPickup:
+        return 'Ready for Pickup';
+      case OrderStatus.delivered:
+        return 'Delivered';
       default:
         return 'Completed';
     }
@@ -573,6 +1351,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         return const Color(0xFFCA8A04);
       case OrderStatus.inProgress:
         return const Color(0xFF0E7490);
+      case OrderStatus.readyForPickup:
+        return const Color(0xFF2A9D8F);
+      case OrderStatus.delivered:
+        return const Color(0xFF3F8CFF);
       default:
         return const Color(0xFF2A9D8F);
     }
@@ -619,15 +1401,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     });
   }
 
-  Machine? _findMachine(int id, List<Machine> machines) {
-    for (final machine in machines) {
-      if (machine.id == id) {
-        return machine;
-      }
-    }
-    return null;
-  }
-
   Machine? _findMachineById(int? id) {
     if (id == null) {
       return null;
@@ -660,7 +1433,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Orders')),
+      appBar: AppBar(title: Text(context.l10n.orders)),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -702,6 +1475,8 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           _buildActiveSessionCard(session),
           const SizedBox(height: 16),
         ],
+        _buildWorkflowActionCard(),
+        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Card(
@@ -720,6 +1495,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
+                  _buildBarcodeScannerCard(),
+                  const SizedBox(height: 16),
+                  _buildGarmentManifestCard(),
+                  const SizedBox(height: 16),
                   CustomerDetailsForm(
                     nameController: _customerNameController,
                     phoneController: _customerPhoneController,
@@ -743,7 +1522,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Washing, drying, and ironing are independent services. The order will be built from whichever services you select here.',
+                          _hasGarmentItems
+                              ? 'Scanned garment rows now drive the order services below. Update services per garment in the manifest to keep the order accurate.'
+                              : 'Washing, drying, and ironing are independent services. The order will be built from whichever services you select here.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 16),
@@ -998,6 +1779,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             Text('Phone: ${session.customerPhone}'),
             Text('Load size: ${session.loadSizeKg}kg'),
             Text('Services: ${session.selectedServices.join(', ')}'),
+            if (session.garmentItems.isNotEmpty)
+              Text(
+                'Garments: ${session.garmentItems.length} rows • ${session.garmentItems.fold<int>(0, (sum, item) => sum + item.quantity)} pieces',
+              ),
             if (session.washOption != null)
               Text('Wash option: ${session.washOption}'),
             if (session.includesWashing)
@@ -1212,6 +1997,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 Text(
                                   'Load size: ${item.order.loadSizeKg ?? item.machine.capacityKg}kg',
                                 ),
+                                if (item.order.garmentItems.isNotEmpty)
+                                  Text(
+                                    'Garments: ${item.order.garmentItems.length} rows • ${item.order.garmentItems.fold<int>(0, (sum, entry) => sum + entry.quantity)} pieces',
+                                  ),
                                 Text(
                                   'Services: ${item.order.selectedServices.join(', ')}',
                                 ),
@@ -1271,5 +2060,314 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
         );
       },
     );
+  }
+
+  Widget _buildWorkflowActionCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recommended Order Flow Actions',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This checklist follows the laundromat intake-to-delivery process and is now the basis for the piece-level order implementation.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            ...List.generate(_workflowActions.length, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text('${index + 1}'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(_workflowActions[index])),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScannedLaundryTag {
+  const _ScannedLaundryTag({
+    required this.rawCode,
+    required this.selectedServices,
+    this.tagId,
+    this.garmentName,
+    this.customerName,
+    this.customerPhone,
+    this.quantity,
+    this.loadSizeKg,
+    this.unitPrice,
+    this.washOption,
+    this.paymentMethod,
+  });
+
+  final String rawCode;
+  final String? tagId;
+  final String? garmentName;
+  final String? customerName;
+  final String? customerPhone;
+  final int? quantity;
+  final int? loadSizeKg;
+  final List<String> selectedServices;
+  final double? unitPrice;
+  final String? washOption;
+  final String? paymentMethod;
+
+  String get deduplicationKey => (tagId ?? rawCode).trim().toUpperCase();
+
+  String get displayLabel => tagId ?? rawCode;
+
+  static _ScannedLaundryTag? parse(
+    String raw, {
+    required List<String> washOptions,
+    required List<String> paymentMethods,
+  }) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final jsonTag = _parseJson(
+      trimmed,
+      washOptions: washOptions,
+      paymentMethods: paymentMethods,
+    );
+    if (jsonTag != null) {
+      return jsonTag;
+    }
+
+    final pipeTag = _parsePipeDelimited(
+      trimmed,
+      washOptions: washOptions,
+      paymentMethods: paymentMethods,
+    );
+    if (pipeTag != null) {
+      return pipeTag;
+    }
+
+    return _ScannedLaundryTag(
+      rawCode: trimmed,
+      tagId: trimmed,
+      selectedServices: const [],
+    );
+  }
+
+  static _ScannedLaundryTag? _parseJson(
+    String raw, {
+    required List<String> washOptions,
+    required List<String> paymentMethods,
+  }) {
+    if (!raw.startsWith('{')) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      return _fromMap(
+        raw: raw,
+        map: decoded,
+        washOptions: washOptions,
+        paymentMethods: paymentMethods,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static _ScannedLaundryTag? _parsePipeDelimited(
+    String raw, {
+    required List<String> washOptions,
+    required List<String> paymentMethods,
+  }) {
+    if (!raw.contains('|')) {
+      return null;
+    }
+
+    final parts = raw.split('|');
+    final map = <String, dynamic>{};
+    for (final part in parts) {
+      final separatorIndex = part.indexOf('=');
+      if (separatorIndex == -1) {
+        continue;
+      }
+      final key = part.substring(0, separatorIndex).trim();
+      final value = part.substring(separatorIndex + 1).trim();
+      if (key.isEmpty || value.isEmpty) {
+        continue;
+      }
+      map[key] = value;
+    }
+    if (map.isEmpty) {
+      return null;
+    }
+    return _fromMap(
+      raw: raw,
+      map: map,
+      washOptions: washOptions,
+      paymentMethods: paymentMethods,
+    );
+  }
+
+  static _ScannedLaundryTag _fromMap({
+    required String raw,
+    required Map<String, dynamic> map,
+    required List<String> washOptions,
+    required List<String> paymentMethods,
+  }) {
+    String? readString(List<String> keys) {
+      for (final key in keys) {
+        for (final entry in map.entries) {
+          if (entry.key.toLowerCase() != key.toLowerCase()) {
+            continue;
+          }
+          final value = entry.value;
+          if (value is String && value.trim().isNotEmpty) {
+            return value.trim();
+          }
+        }
+      }
+      return null;
+    }
+
+    int? readInt(List<String> keys) {
+      final text = readString(keys);
+      if (text == null) {
+        return null;
+      }
+      return int.tryParse(text);
+    }
+
+    List<String> readServices() {
+      final values = <String>[];
+      final directValue = map['selectedServices'] ?? map['services'];
+      if (directValue is List) {
+        for (final item in directValue) {
+          if (item is String) {
+            values.add(item);
+          }
+        }
+      } else {
+        final text = readString(
+          const ['selectedServices', 'services', 'service', 'serviceCodes'],
+        );
+        if (text != null) {
+          values.addAll(text.split(RegExp(r'[,+/]')));
+        }
+      }
+
+      final normalized = <String>[];
+      for (final item in values) {
+        final service = _normalizeService(item);
+        if (service != null && !normalized.contains(service)) {
+          normalized.add(service);
+        }
+      }
+      return normalized;
+    }
+
+    return _ScannedLaundryTag(
+      rawCode: raw,
+      tagId: readString(const ['tagId', 'tag', 'id', 'barcode']),
+      garmentName: readString(
+        const ['garmentName', 'garment', 'itemName', 'pieceType'],
+      ),
+      customerName: readString(
+        const ['customerName', 'customer', 'name', 'customer_name'],
+      ),
+      customerPhone: readString(
+        const ['customerPhone', 'phone', 'mobile', 'customer_phone'],
+      ),
+      quantity: readInt(const ['quantity', 'qty', 'pieces']),
+      loadSizeKg: readInt(const ['loadSizeKg', 'load', 'kg']),
+      selectedServices: readServices(),
+      unitPrice: () {
+        final text = readString(const ['unitPrice', 'price', 'rate']);
+        if (text == null) {
+          return null;
+        }
+        return double.tryParse(text);
+      }(),
+      washOption: _normalizeOption(
+        readString(const ['washOption', 'wash', 'program']),
+        supportedOptions: washOptions,
+      ),
+      paymentMethod: _normalizeOption(
+        readString(const ['paymentMethod', 'payment', 'method']),
+        supportedOptions: paymentMethods,
+      ),
+    );
+  }
+
+  static String? _normalizeService(String raw) {
+    final normalized = raw.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized.contains('wash')) {
+      return LaundryService.washing;
+    }
+    if (normalized.contains('dry')) {
+      return LaundryService.drying;
+    }
+    if (normalized.contains('iron') || normalized.contains('press')) {
+      return LaundryService.ironing;
+    }
+    return null;
+  }
+
+  static String? _normalizeOption(
+    String? raw, {
+    required List<String> supportedOptions,
+  }) {
+    if (raw == null) {
+      return null;
+    }
+    final normalized = raw.trim().toLowerCase();
+    for (final option in supportedOptions) {
+      if (option.toLowerCase() == normalized) {
+        return option;
+      }
+    }
+    if (supportedOptions.contains('UPI QR') && normalized == 'upi') {
+      return 'UPI QR';
+    }
+    if (supportedOptions.contains('Specific Wash') &&
+        normalized == 'specific') {
+      return 'Specific Wash';
+    }
+    if (supportedOptions.contains('Gentle Wash') && normalized == 'gentle') {
+      return 'Gentle Wash';
+    }
+    return null;
   }
 }

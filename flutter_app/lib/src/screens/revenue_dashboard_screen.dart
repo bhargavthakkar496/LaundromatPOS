@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
@@ -12,6 +13,12 @@ import '../models/refund_request.dart';
 import '../models/revenue.dart';
 import '../services/revenue_report_service.dart';
 import '../services/revenue_reporting_service.dart';
+import '../ui/tokens/app_colors.dart';
+import '../widgets/dashboard_hero_banner.dart';
+import '../widgets/dashboard_section.dart';
+import '../widgets/dashboard_wrap_grid.dart';
+import '../widgets/metric_card.dart';
+import '../widgets/surface_card.dart';
 
 class RevenueDashboardScreen extends StatefulWidget {
   const RevenueDashboardScreen({
@@ -267,7 +274,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Revenue & Day End'),
+        title: Text(context.l10n.revenue),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),
@@ -284,9 +291,15 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                 const SizedBox(height: 20),
                 _buildFilters(),
                 const SizedBox(height: 20),
-                _buildSummaryCards(summary),
+                DashboardSection(
+                  title: 'Revenue Snapshot',
+                  child: _buildSummaryCards(summary),
+                ),
                 const SizedBox(height: 20),
-                _buildBreakdowns(summary),
+                DashboardSection(
+                  title: 'Performance Breakdowns',
+                  child: _buildBreakdowns(summary),
+                ),
                 const SizedBox(height: 20),
                 _buildTransactions(filteredTransactions),
                 const SizedBox(height: 20),
@@ -299,91 +312,54 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
   }
 
   Widget _buildHero(RevenueSummary summary) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0C6E7D), Color(0xFF119AB0)],
+    return DashboardHeroBanner(
+      title: 'Revenue Command Center',
+      description:
+          'Slice revenue by date, payment method, service, and machine type, then print a clean report or close the day with drawer reconciliation.',
+      maxContentWidth: 540,
+      gradient: const LinearGradient(
+        colors: [Color(0xFF0C6E7D), Color(0xFF119AB0)],
+      ),
+      shadow: const BoxShadow(
+        color: Color(0x260C6E7D),
+        blurRadius: 24,
+        offset: Offset(0, 14),
+      ),
+      metrics: [
+        MetricCard(
+          label: 'Net Revenue',
+          value: 'INR ${summary.netRevenue.toStringAsFixed(0)}',
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x260C6E7D),
-            blurRadius: 24,
-            offset: Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        alignment: WrapAlignment.spaceBetween,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Revenue Command Center',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Slice revenue by date, payment method, service, and machine type, then print a clean report or close the day with drawer reconciliation.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.92),
-                      ),
-                ),
-              ],
-            ),
-          ),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _HeroPill(
-                  label: 'Net Revenue',
-                  value: 'INR ${summary.netRevenue.toStringAsFixed(0)}'),
-              _HeroPill(
-                  label: 'Transactions', value: '${summary.transactionCount}'),
-              _HeroPill(
-                  label: 'Pending Refunds',
-                  value: '${summary.pendingRefundCount}'),
-            ],
-          ),
-        ],
-      ),
+        MetricCard(
+          label: 'Transactions',
+          value: '${summary.transactionCount}',
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
+        ),
+        MetricCard(
+          label: 'Pending Refunds',
+          value: '${summary.pendingRefundCount}',
+          accent: AppColors.brandPrimary,
+          style: MetricCardStyle.glass,
+        ),
+      ],
     );
   }
 
   Widget _buildFilters() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return DashboardSection(
+      title: 'Revenue Segregation Filters',
+      action: OutlinedButton.icon(
+        onPressed: _printingReport ? null : _printRevenueReport,
+        icon: const Icon(Icons.print_outlined),
+        label: Text(_printingReport ? 'Preparing...' : 'Print Report'),
+      ),
+      child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Revenue Segregation Filters',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _printingReport ? null : _printRevenueReport,
-                  icon: const Icon(Icons.print_outlined),
-                  label:
-                      Text(_printingReport ? 'Preparing...' : 'Print Report'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -488,94 +464,73 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
   }
 
   Widget _buildSummaryCards(RevenueSummary summary) {
-    return Wrap(
+    return DashboardWrapGrid(
       spacing: 12,
       runSpacing: 12,
+      minChildWidth: 180,
+      maxColumns: 6,
       children: [
-        _MetricCard(
+        MetricCard(
             label: 'Gross Revenue',
             value: 'INR ${summary.grossRevenue.toStringAsFixed(0)}',
-            tone: const Color(0xFF0E7490)),
-        _MetricCard(
+            accent: AppColors.brandPrimary,
+            style: MetricCardStyle.tinted),
+        MetricCard(
             label: 'Refunded',
             value: 'INR ${summary.refundedRevenue.toStringAsFixed(0)}',
-            tone: const Color(0xFFB42318)),
-        _MetricCard(
+            accent: const Color(0xFFB42318),
+            style: MetricCardStyle.tinted),
+        MetricCard(
             label: 'Net Revenue',
             value: 'INR ${summary.netRevenue.toStringAsFixed(0)}',
-            tone: const Color(0xFF2A9D8F)),
-        _MetricCard(
+            accent: AppColors.statusSuccess,
+            style: MetricCardStyle.tinted),
+        MetricCard(
             label: 'Average Ticket',
             value: 'INR ${summary.averageTicket.toStringAsFixed(0)}',
-            tone: const Color(0xFF7C3AED)),
-        _MetricCard(
+            accent: const Color(0xFF7C3AED),
+            style: MetricCardStyle.tinted),
+        MetricCard(
             label: 'Cash Net',
             value: 'INR ${summary.cashNet.toStringAsFixed(0)}',
-            tone: const Color(0xFFD97706)),
-        _MetricCard(
+            accent: const Color(0xFFD97706),
+            style: MetricCardStyle.tinted),
+        MetricCard(
             label: 'Digital Net',
             value:
                 'INR ${(summary.cardNet + summary.upiNet + summary.otherNet).toStringAsFixed(0)}',
-            tone: const Color(0xFF1D4ED8)),
+            accent: const Color(0xFF1D4ED8),
+            style: MetricCardStyle.tinted),
       ],
     );
   }
 
   Widget _buildBreakdowns(RevenueSummary summary) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useSingleColumn = constraints.maxWidth < 980;
-        final children = [
-          _BreakdownCard(title: 'Payment Mix', items: summary.paymentBreakdown),
-          _BreakdownCard(title: 'Service Mix', items: summary.serviceBreakdown),
-          _BreakdownCard(
-              title: 'Machine Type Mix', items: summary.machineTypeBreakdown),
-          _BreakdownCard(
-              title: 'Top Machines', items: summary.topMachineBreakdown),
-        ];
-        if (useSingleColumn) {
-          return Column(
-            children: children
-                .map((child) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: child,
-                    ))
-                .toList(),
-          );
-        }
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: children
-              .map(
-                (child) => SizedBox(
-                  width: (constraints.maxWidth - 12) / 2,
-                  child: child,
-                ),
-              )
-              .toList(),
-        );
-      },
+    return DashboardWrapGrid(
+      spacing: 12,
+      runSpacing: 12,
+      minChildWidth: 320,
+      maxColumns: 2,
+      children: [
+        _BreakdownCard(title: 'Payment Mix', items: summary.paymentBreakdown),
+        _BreakdownCard(title: 'Service Mix', items: summary.serviceBreakdown),
+        _BreakdownCard(
+            title: 'Machine Type Mix', items: summary.machineTypeBreakdown),
+        _BreakdownCard(
+            title: 'Top Machines', items: summary.topMachineBreakdown),
+      ],
     );
   }
 
   Widget _buildTransactions(List<OrderHistoryItem> transactions) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return DashboardSection(
+      title: 'Report Pullout',
+      description:
+          'Filtered transactions are ready for audit review and printable reporting.',
+      child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Report Pullout',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              'Filtered transactions are ready for audit review and printable reporting.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF526777),
-                  ),
-            ),
-            const SizedBox(height: 14),
             if (transactions.isEmpty)
               const Text('No transactions match the current revenue filters.')
             else
@@ -613,35 +568,19 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
   }
 
   Widget _buildDayEndSection(DayEndCheckout preview) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return DashboardSection(
+      title: 'Day-End Checkout',
+      description:
+          'Reconcile the drawer, store notes, and lock in a printable closeout snapshot for the selected business day.',
+      action: OutlinedButton.icon(
+        onPressed: _pickDayEndDate,
+        icon: const Icon(Icons.calendar_today_outlined),
+        label: Text(_dateFormat.format(_dayEndDate)),
+      ),
+      child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Day-End Checkout',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _pickDayEndDate,
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(_dateFormat.format(_dayEndDate)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Reconcile the drawer, store notes, and lock in a printable closeout snapshot for the selected business day.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF526777),
-                  ),
-            ),
-            const SizedBox(height: 14),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -675,23 +614,26 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _MetricCard(
+                MetricCard(
                   label: 'Expected Drawer',
                   value: 'INR ${preview.expectedDrawerCash.toStringAsFixed(0)}',
-                  tone: const Color(0xFFD97706),
+                  accent: const Color(0xFFD97706),
+                  style: MetricCardStyle.tinted,
                 ),
-                _MetricCard(
+                MetricCard(
                   label: 'Variance',
                   value: 'INR ${preview.cashVariance.toStringAsFixed(0)}',
-                  tone: preview.cashVariance == 0
-                      ? const Color(0xFF2A9D8F)
+                  accent: preview.cashVariance == 0
+                      ? AppColors.statusSuccess
                       : const Color(0xFFB42318),
+                  style: MetricCardStyle.tinted,
                 ),
-                _MetricCard(
+                MetricCard(
                   label: 'Pending Refund Exposure',
                   value:
                       'INR ${preview.pendingRefundAmount.toStringAsFixed(0)}',
-                  tone: const Color(0xFF7C3AED),
+                  accent: const Color(0xFF7C3AED),
+                  style: MetricCardStyle.tinted,
                 ),
               ],
             ),
@@ -712,15 +654,12 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
   }
 
   Widget _buildRecentCheckouts() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return DashboardSection(
+      title: 'Recent Day-End Closures',
+      child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Recent Day-End Closures',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
             if (_checkouts.isEmpty)
               const Text('No day-end checkout has been recorded yet.')
             else
@@ -786,85 +725,6 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
       DateTime(value.year, value.month, value.day);
 }
 
-class _HeroPill extends StatelessWidget {
-  const _HeroPill({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.88),
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.tone,
-  });
-
-  final String label;
-  final String value;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: tone,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _BreakdownCard extends StatelessWidget {
   const _BreakdownCard({
     required this.title,
@@ -876,36 +736,33 @@ class _BreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            if (items.isEmpty)
-              const Text(
-                  'No revenue data in this segment for the current filters.')
-            else
-              ...items.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(item.label)),
-                      Text('${item.orderCount} orders'),
-                      const SizedBox(width: 12),
-                      Text(
-                        'INR ${item.amount.toStringAsFixed(0)}',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ],
-                  ),
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            const Text(
+                'No revenue data in this segment for the current filters.')
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(item.label)),
+                    Text('${item.orderCount} orders'),
+                    const SizedBox(width: 12),
+                    Text(
+                      'INR ${item.amount.toStringAsFixed(0)}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

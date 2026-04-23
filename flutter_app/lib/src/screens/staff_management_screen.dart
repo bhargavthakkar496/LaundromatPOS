@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/staff.dart';
 
 class StaffManagementScreen extends StatefulWidget {
@@ -389,7 +390,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Staff Operations'),
+          title: Text(context.l10n.staff),
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Roster'),

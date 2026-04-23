@@ -5,6 +5,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+dependencies {
+    implementation(files("libs/HPRTAndroidSDK.jar"))
+}
+
 android {
     namespace = "com.example.washpos_flutter"
     compileSdk = flutter.compileSdkVersion

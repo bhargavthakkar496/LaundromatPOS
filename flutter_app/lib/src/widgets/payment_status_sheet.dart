@@ -26,6 +26,7 @@ class PaymentStatusSheet extends StatefulWidget {
 class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
   PaymentSession? _session;
   Timer? _timer;
+  Timer? _autoFinishTimer;
   bool _loading = true;
   bool _polling = false;
   String? _error;
@@ -34,12 +35,13 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
   @override
   void initState() {
     super.initState();
-    _initializeSession(simulateFailure: widget.paymentMethod == 'UPI QR');
+    _initializeSession();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _autoFinishTimer?.cancel();
     super.dispose();
   }
 
@@ -80,6 +82,7 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
 
   Future<void> _retryPayment() async {
     _timer?.cancel();
+    _autoFinishTimer?.cancel();
     setState(() {
       _attempt += 1;
       _loading = true;
@@ -107,6 +110,7 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
       }
       if (updated.isPaid) {
         _timer?.cancel();
+        _scheduleAutoFinish(updated);
       } else if (updated.isFailed) {
         _timer?.cancel();
       }
@@ -123,6 +127,16 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
         _polling = false;
       });
     }
+  }
+
+  void _scheduleAutoFinish(PaymentSession session) {
+    _autoFinishTimer?.cancel();
+    _autoFinishTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(session);
+    });
   }
 
   String get _statusLabel {
@@ -203,240 +217,353 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
     required int index,
     required String title,
     required String caption,
+    bool expand = true,
   }) {
     final isActive = _statusStepIndex >= index;
     final isFailure =
         _session?.status == PaymentSessionStatus.failed && index == 2;
 
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
+    final child = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isFailure
+            ? const Color(0xFFFEE4E2)
+            : isActive
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
           color: isFailure
-              ? const Color(0xFFFEE4E2)
+              ? const Color(0xFFFDA29B)
               : isActive
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isFailure
-                ? const Color(0xFFFDA29B)
-                : isActive
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outlineVariant,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${index + 1}. $title',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              caption,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outlineVariant,
         ),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${index + 1}. $title',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            caption,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+
+    if (expand) {
+      return Expanded(child: child);
+    }
+    return SizedBox(width: double.infinity, child: child);
+  }
+
+  Widget _buildActionButtons({
+    required BuildContext context,
+    required PaymentSession? session,
+    required bool stacked,
+  }) {
+    final retryOrRefresh = session != null && session.isFailed
+        ? OutlinedButton.icon(
+            onPressed: _loading ? null : _retryPayment,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Retry Payment'),
+          )
+        : OutlinedButton.icon(
+            onPressed: _loading || _polling ? null : _pollStatus,
+            icon: const Icon(Icons.refresh),
+            label: Text(_polling ? 'Checking...' : 'Refresh Status'),
+          );
+
+    final finish = FilledButton(
+      onPressed: session != null && session.isPaid
+          ? () => Navigator.of(context).pop(session)
+          : null,
+      child: const Text('Finish Payment'),
+    );
+
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          retryOrRefresh,
+          const SizedBox(height: 12),
+          finish,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: retryOrRefresh),
+        const SizedBox(width: 12),
+        Expanded(child: finish),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final session = _session;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final compactHeight = screenHeight < 760;
+    final compactWidth = screenWidth < 560;
+    final compactLayout = compactHeight || compactWidth;
+    final maxSheetHeight = screenHeight * (compactLayout ? 0.94 : 0.88);
+    final contentSpacing = compactLayout ? 12.0 : 16.0;
+    final cardPadding = compactLayout ? 12.0 : 16.0;
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Payment Status',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Live status updates are being polled automatically for this payment.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 36),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Unable to load payment session: $_error'),
-                ),
-              )
-            else if (session != null) ...[
-              Card(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxSheetHeight),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            compactLayout ? 12 : 16,
+            compactLayout ? 8 : 12,
+            compactLayout ? 12 : 16,
+            compactLayout ? 12 : 20,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Payment Status',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              SizedBox(height: compactLayout ? 6 : 8),
+              Text(
+                'Live status updates are being polled automatically for this payment.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              SizedBox(height: contentSpacing),
+              Expanded(
+                child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'How to pay',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        '1. Open your payment app.\n2. Scan the QR and approve the amount.\n3. Keep this screen open while we confirm the payment.',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildStep(
-                    context,
-                    index: 0,
-                    title: 'Scan',
-                    caption: 'Scan or open the payment request',
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStep(
-                    context,
-                    index: 1,
-                    title: 'Confirm',
-                    caption: 'Approve the payment in your app',
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStep(
-                    context,
-                    index: 2,
-                    title: session.isFailed ? 'Retry' : 'Paid',
-                    caption: session.isFailed
-                        ? 'Create a fresh payment request'
-                        : 'Wait for confirmation',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Center(
-                child: Container(
-                  width: 184,
-                  height: 184,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(_paymentIcon, size: 92, color: _statusColor),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.paymentMethod,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Attempt ${session.attempt}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Card(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.circle, size: 12, color: _statusColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            _statusLabel,
-                            style: Theme.of(context).textTheme.titleMedium,
+                      if (_loading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 36),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_error != null)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child:
+                                Text('Unable to load payment session: $_error'),
+                          ),
+                        )
+                      else if (session != null) ...[
+                        Card(
+                          color:
+                              Theme.of(context).colorScheme.surfaceContainerLow,
+                          child: Padding(
+                            padding: EdgeInsets.all(cardPadding),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'How to pay',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  '1. Open your payment app.\n2. Scan the QR and approve the amount.\n3. Keep this screen open while we confirm the payment.',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: compactLayout ? 10 : 12),
+                        if (compactLayout)
+                          Column(
+                            children: [
+                              _buildStep(
+                                context,
+                                index: 0,
+                                title: 'Scan',
+                                caption: 'Scan or open the payment request',
+                                expand: false,
+                              ),
+                              const SizedBox(height: 8),
+                              _buildStep(
+                                context,
+                                index: 1,
+                                title: 'Confirm',
+                                caption: 'Approve the payment in your app',
+                                expand: false,
+                              ),
+                              const SizedBox(height: 8),
+                              _buildStep(
+                                context,
+                                index: 2,
+                                title: session.isFailed ? 'Retry' : 'Paid',
+                                caption: session.isFailed
+                                    ? 'Create a fresh payment request'
+                                    : 'Wait for confirmation',
+                                expand: false,
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              _buildStep(
+                                context,
+                                index: 0,
+                                title: 'Scan',
+                                caption: 'Scan or open the payment request',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildStep(
+                                context,
+                                index: 1,
+                                title: 'Confirm',
+                                caption: 'Approve the payment in your app',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildStep(
+                                context,
+                                index: 2,
+                                title: session.isFailed ? 'Retry' : 'Paid',
+                                caption: session.isFailed
+                                    ? 'Create a fresh payment request'
+                                    : 'Wait for confirmation',
+                              ),
+                            ],
+                          ),
+                        SizedBox(height: contentSpacing),
+                        Center(
+                          child: Container(
+                            width: compactHeight ? 144 : 184,
+                            height: compactHeight ? 144 : 184,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerLowest,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _paymentIcon,
+                                  size: compactHeight ? 68 : 92,
+                                  color: _statusColor,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  widget.paymentMethod,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Attempt ${session.attempt}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: contentSpacing),
+                        Card(
+                          color:
+                              Theme.of(context).colorScheme.surfaceContainerLow,
+                          child: Padding(
+                            padding: EdgeInsets.all(cardPadding),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.circle,
+                                        size: 12, color: _statusColor),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _statusLabel,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(_statusMessage),
+                                const SizedBox(height: 14),
+                                Text(
+                                  'Amount: INR ${session.amount.toStringAsFixed(0)}',
+                                ),
+                                Text('Reference: ${session.reference}'),
+                                Text('QR payload: ${session.qrPayload}'),
+                                Text(
+                                  'Last checked: ${session.checkedAt.hour.toString().padLeft(2, '0')}:${session.checkedAt.minute.toString().padLeft(2, '0')}:${session.checkedAt.second.toString().padLeft(2, '0')}',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (session.isFailed) ...[
+                          SizedBox(height: compactLayout ? 10 : 12),
+                          Card(
+                            color: const Color(0xFFFEE4E2),
+                            child: Padding(
+                              padding: EdgeInsets.all(cardPadding),
+                              child: Text(
+                                session.failureReason ??
+                                    'Payment failed. Retry to continue with a fresh request.',
+                              ),
+                            ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(_statusMessage),
-                      const SizedBox(height: 14),
-                      Text('Amount: INR ${session.amount.toStringAsFixed(0)}'),
-                      Text('Reference: ${session.reference}'),
-                      Text('QR payload: ${session.qrPayload}'),
-                      Text('Last checked: ${session.checkedAt.hour.toString().padLeft(2, '0')}:${session.checkedAt.minute.toString().padLeft(2, '0')}:${session.checkedAt.second.toString().padLeft(2, '0')}'),
+                        if (session.isPaid) ...[
+                          SizedBox(height: compactLayout ? 10 : 12),
+                          Card(
+                            color:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            child: Padding(
+                              padding: EdgeInsets.all(cardPadding),
+                              child: const Text(
+                                'Confirmation received. The order can now be completed.',
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (compactLayout) ...[
+                          SizedBox(height: contentSpacing),
+                          _buildActionButtons(
+                            context: context,
+                            session: session,
+                            stacked: compactWidth,
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
               ),
-              if (session.isFailed) ...[
-                const SizedBox(height: 12),
-                Card(
-                  color: const Color(0xFFFEE4E2),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      session.failureReason ??
-                          'Payment failed. Retry to continue with a fresh request.',
-                    ),
-                  ),
-                ),
-              ],
-              if (session.isPaid) ...[
-                const SizedBox(height: 12),
-                Card(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  child: const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Confirmation received. The order can now be completed.',
-                    ),
-                  ),
+              if (!compactLayout) ...[
+                SizedBox(height: contentSpacing),
+                _buildActionButtons(
+                  context: context,
+                  session: session,
+                  stacked: false,
                 ),
               ],
             ],
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: session != null && session.isFailed
-                      ? OutlinedButton.icon(
-                          onPressed: _loading ? null : _retryPayment,
-                          icon: const Icon(Icons.restart_alt),
-                          label: const Text('Retry Payment'),
-                        )
-                      : OutlinedButton.icon(
-                          onPressed: _loading || _polling ? null : _pollStatus,
-                          icon: const Icon(Icons.refresh),
-                          label: Text(_polling ? 'Checking...' : 'Refresh Status'),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: session != null && session.isPaid
-                        ? () => Navigator.of(context).pop(session)
-                        : null,
-                    child: const Text('Finish Payment'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -10,6 +10,8 @@ enum ManagerOptionIconType {
   staff,
   pricing,
   customerScreen,
+  delivery,
+  pickup,
   reports,
   maintenance,
   revenue,
@@ -46,6 +48,8 @@ String _svgByType(ManagerOptionIconType type) {
     ManagerOptionIconType.staff => _staffSvg,
     ManagerOptionIconType.pricing => _pricingSvg,
     ManagerOptionIconType.customerScreen => _customerScreenSvg,
+    ManagerOptionIconType.delivery => _deliverySvg,
+    ManagerOptionIconType.pickup => _pickupSvg,
     ManagerOptionIconType.reports => _reportsSvg,
     ManagerOptionIconType.maintenance => _maintenanceSvg,
     ManagerOptionIconType.revenue => _revenueSvg,
@@ -191,6 +195,43 @@ const _customerScreenSvg = '''
   <path d="M52 94h24" stroke="#355C7D" stroke-width="7" stroke-linecap="round"/>
   <path d="M64 80v14" stroke="#355C7D" stroke-width="7" stroke-linecap="round"/>
   <path d="M86 47h10m-5-5v10" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+</svg>
+''';
+
+const _deliverySvg = '''
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="12" y1="14" x2="114" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF7FF"/>
+      <stop offset="1" stop-color="#C9E7FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#bg)"/>
+  <rect x="26" y="48" width="48" height="28" rx="8" fill="#2F6FA4"/>
+  <path d="M74 54h14l14 14v8H74z" fill="#5CA5D8"/>
+  <rect x="34" y="38" width="28" height="10" rx="5" fill="#83C9F2"/>
+  <circle cx="44" cy="84" r="10" fill="#274B66"/>
+  <circle cx="86" cy="84" r="10" fill="#274B66"/>
+  <circle cx="44" cy="84" r="4" fill="#FFFFFF"/>
+  <circle cx="86" cy="84" r="4" fill="#FFFFFF"/>
+  <path d="M47 25h28" stroke="#2E9C69" stroke-width="6" stroke-linecap="round"/>
+  <path d="M65 17l10 8-10 8" fill="none" stroke="#2E9C69" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+''';
+
+const _pickupSvg = '''
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="14" y1="16" x2="114" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F8FF"/>
+      <stop offset="1" stop-color="#D8E4FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#bg)"/>
+  <path d="M34 48h60l-5 38H39z" fill="#FFFFFF" stroke="#476A8A" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M46 48c0-10 8-18 18-18s18 8 18 18" fill="none" stroke="#476A8A" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="86" cy="82" r="18" fill="#E7FFF1" stroke="#2E9C69" stroke-width="3"/>
+  <path d="M78 82l5 5 11-13" fill="none" stroke="#2E9C69" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 ''';
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../data/pos_repository.dart';
+import '../localization/app_localizations.dart';
 import '../models/order_history_item.dart';
 import '../models/pos_user.dart';
 import '../models/refund_request.dart';
@@ -52,6 +53,8 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
   }
 
   Future<void> _processRefundRequest(RefundRequest request) async {
+    final messenger = ScaffoldMessenger.of(context);
+
     setState(() {
       _processingRequestId = request.id;
     });
@@ -69,7 +72,7 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
       setState(() {
         _processingRequestId = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Refund processing failed.')),
       );
       return;
@@ -90,7 +93,7 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
       await _notifyRefundProcessed(historyItem);
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text('Refund processed and moved out of queue.')),
     );
     _loadRequests(showLoading: false);
@@ -126,7 +129,7 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Refund Queue'),
+        title: Text(context.l10n.refundQueue),
         actions: [
           IconButton(
             onPressed:
