@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/pos_repository.dart';
 import '../models/payment_session.dart';
+import '../services/currency_formatter.dart';
 
 class PaymentStatusSheet extends StatefulWidget {
   const PaymentStatusSheet({
@@ -504,7 +505,7 @@ class _PaymentStatusSheetState extends State<PaymentStatusSheet> {
                                 Text(_statusMessage),
                                 const SizedBox(height: 14),
                                 Text(
-                                  'Amount: INR ${session.amount.toStringAsFixed(0)}',
+                                  'Amount: ${CurrencyFormatter.formatAmountForContext(context, session.amount)}',
                                 ),
                                 Text('Reference: ${session.reference}'),
                                 Text('QR payload: ${session.qrPayload}'),

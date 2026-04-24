@@ -14,6 +14,7 @@ import '../models/pos_user.dart';
 import '../models/pricing.dart';
 import '../models/refund_request.dart';
 import '../models/reservation_history_item.dart';
+import '../models/staff.dart';
 
 PosUser decodePosUser(Map<String, dynamic> json) {
   return PosUser(
@@ -350,6 +351,64 @@ RefundRequest decodeRefundRequest(Map<String, dynamic> json) {
         ? null
         : DateTime.parse(json['processedAt'] as String),
     processedByName: json['processedByName'] as String?,
+  );
+}
+
+StaffMember decodeStaffMember(Map<String, dynamic> json) {
+  return StaffMember(
+    id: json['id'] as int,
+    fullName: json['fullName'] as String,
+    role: json['role'] as String,
+    phone: json['phone'] as String,
+    hourlyRate: (json['hourlyRate'] as num).toDouble(),
+    isActive: json['isActive'] as bool,
+  );
+}
+
+StaffShift decodeStaffShift(Map<String, dynamic> json) {
+  return StaffShift(
+    id: json['id'] as int,
+    staffId: json['staffId'] as int,
+    shiftDate: DateTime.parse(json['shiftDate'] as String),
+    startTimeLabel: json['startTimeLabel'] as String,
+    endTimeLabel: json['endTimeLabel'] as String,
+    branch: json['branch'] as String,
+    assignment: json['assignment'] as String,
+    hours: (json['hours'] as num).toDouble(),
+  );
+}
+
+StaffLeaveRequest decodeStaffLeaveRequest(Map<String, dynamic> json) {
+  return StaffLeaveRequest(
+    id: json['id'] as int,
+    staffId: json['staffId'] as int,
+    staffName: json['staffName'] as String,
+    leaveType: json['leaveType'] as String,
+    startDate: DateTime.parse(json['startDate'] as String),
+    endDate: DateTime.parse(json['endDate'] as String),
+    status: json['status'] as String,
+    reason: json['reason'] as String,
+    requestedAt: DateTime.parse(json['requestedAt'] as String),
+    reviewedByName: json['reviewedByName'] as String?,
+  );
+}
+
+StaffPayout decodeStaffPayout(Map<String, dynamic> json) {
+  return StaffPayout(
+    id: json['id'] as int,
+    staffId: json['staffId'] as int,
+    staffName: json['staffName'] as String,
+    periodLabel: json['periodLabel'] as String,
+    hoursWorked: (json['hoursWorked'] as num).toDouble(),
+    grossAmount: (json['grossAmount'] as num).toDouble(),
+    bonusAmount: (json['bonusAmount'] as num).toDouble(),
+    deductionsAmount: (json['deductionsAmount'] as num).toDouble(),
+    netAmount: (json['netAmount'] as num).toDouble(),
+    status: json['status'] as String,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    paidAt: json['paidAt'] == null
+        ? null
+        : DateTime.parse(json['paidAt'] as String),
   );
 }
 

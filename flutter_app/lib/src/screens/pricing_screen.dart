@@ -5,6 +5,7 @@ import '../data/pos_repository.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/pricing.dart';
+import '../services/currency_formatter.dart';
 
 class PricingScreen extends StatefulWidget {
   const PricingScreen({
@@ -26,6 +27,7 @@ class _PricingScreenState extends State<PricingScreen> {
   List<PricingCampaign> _campaigns = const [];
   PricingQuote? _latestQuote;
   bool _loading = true;
+  String? _loadError;
   int? _selectedWasherId;
   int? _selectedDryerId;
   int? _selectedIroningId;
@@ -44,40 +46,53 @@ class _PricingScreenState extends State<PricingScreen> {
     if (showLoading && mounted) {
       setState(() {
         _loading = true;
+        _loadError = null;
       });
     }
 
-    final results = await Future.wait([
-      widget.repository.getMachines(),
-      widget.repository.getPricingServiceFees(),
-      widget.repository.getPricingCampaigns(),
-    ]);
+    try {
+      final results = await Future.wait([
+        widget.repository.getMachines(),
+        widget.repository.getPricingServiceFees(),
+        widget.repository.getPricingCampaigns(),
+      ]);
 
-    if (!mounted) {
-      return;
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _machines = results[0] as List<Machine>;
+        _serviceFees = results[1] as List<PricingServiceFee>;
+        _campaigns = results[2] as List<PricingCampaign>;
+        _loading = false;
+        _loadError = null;
+        _selectedWasherId ??= _machines
+            .where((machine) => machine.isWasher)
+            .map((machine) => machine.id)
+            .cast<int?>()
+            .firstOrNull;
+        _selectedDryerId ??= _machines
+            .where((machine) => machine.isDryer)
+            .map((machine) => machine.id)
+            .cast<int?>()
+            .firstOrNull;
+        _selectedIroningId ??= _machines
+            .where((machine) => machine.isIroningStation)
+            .map((machine) => machine.id)
+            .cast<int?>()
+            .firstOrNull;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _loadError =
+            'Pricing data could not be loaded right now. Check backend connectivity and try again.';
+      });
     }
-
-    setState(() {
-      _machines = results[0] as List<Machine>;
-      _serviceFees = results[1] as List<PricingServiceFee>;
-      _campaigns = results[2] as List<PricingCampaign>;
-      _loading = false;
-      _selectedWasherId ??= _machines
-          .where((machine) => machine.isWasher)
-          .map((machine) => machine.id)
-          .cast<int?>()
-          .firstOrNull;
-      _selectedDryerId ??= _machines
-          .where((machine) => machine.isDryer)
-          .map((machine) => machine.id)
-          .cast<int?>()
-          .firstOrNull;
-      _selectedIroningId ??= _machines
-          .where((machine) => machine.isIroningStation)
-          .map((machine) => machine.id)
-          .cast<int?>()
-          .firstOrNull;
-    });
   }
 
   Machine? _machineById(int? id) {
@@ -101,9 +116,9 @@ class _PricingScreenState extends State<PricingScreen> {
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Machine price',
-            prefixText: 'INR ',
+            prefixText: CurrencyFormatter.currencyPrefixForContext(context),
           ),
         ),
         actions: [
@@ -138,7 +153,11 @@ class _PricingScreenState extends State<PricingScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${machine.name} updated to INR ${nextValue.toStringAsFixed(0)}.')),
+      SnackBar(
+        content: Text(
+          '${machine.name} updated to ${CurrencyFormatter.formatAmountForContext(context, nextValue)}.',
+        ),
+      ),
     );
     _loadData(showLoading: false);
   }
@@ -168,9 +187,10 @@ class _PricingScreenState extends State<PricingScreen> {
                 TextField(
                   controller: controller,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Fee amount',
-                    prefixText: 'INR ',
+                    prefixText:
+                        CurrencyFormatter.currencyPrefixForContext(context),
                   ),
                 ),
               ],
@@ -274,7 +294,9 @@ class _PricingScreenState extends State<PricingScreen> {
                     labelText: discountType == PricingDiscountType.percent
                         ? 'Discount percent'
                         : 'Discount amount',
-                    prefixText: discountType == PricingDiscountType.percent ? null : 'INR ',
+                    prefixText: discountType == PricingDiscountType.percent
+                        ? null
+                        : CurrencyFormatter.currencyPrefixForContext(context),
                     suffixText: discountType == PricingDiscountType.percent ? '%' : null,
                   ),
                 ),
@@ -301,9 +323,10 @@ class _PricingScreenState extends State<PricingScreen> {
                 TextField(
                   controller: minOrderController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Minimum order amount',
-                    prefixText: 'INR ',
+                    prefixText:
+                        CurrencyFormatter.currencyPrefixForContext(context),
                   ),
                 ),
               ],
@@ -413,7 +436,34 @@ class _PricingScreenState extends State<PricingScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
+          : _loadError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.sync_problem_outlined,
+                          size: 40,
+                          color: Color(0xFFB45309),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _loadData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView(
               padding: const EdgeInsets.all(20),
               children: [
                 Container(
@@ -464,7 +514,10 @@ class _PricingScreenState extends State<PricingScreen> {
                             label: 'Latest Quote',
                             value: _latestQuote == null
                                 ? 'Run Preview'
-                                : 'INR ${_latestQuote!.finalTotal.toStringAsFixed(0)}',
+                                : CurrencyFormatter.formatAmountForContext(
+                                    context,
+                                    _latestQuote!.finalTotal,
+                                  ),
                           ),
                         ],
                       ),
@@ -491,7 +544,7 @@ class _PricingScreenState extends State<PricingScreen> {
                 const SizedBox(height: 20),
                 _buildQuoteSection(context),
               ],
-            ),
+                ),
     );
   }
 
@@ -537,7 +590,10 @@ class _PricingScreenState extends State<PricingScreen> {
                               Text('${machine.type} • ${machine.capacityKg} kg'),
                               const SizedBox(height: 10),
                               Text(
-                                'INR ${machine.price.toStringAsFixed(0)}',
+                                CurrencyFormatter.formatAmountForContext(
+                                  context,
+                                  machine.price,
+                                ),
                                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                       color: const Color(0xFF0F766E),
                                       fontWeight: FontWeight.w700,
@@ -585,7 +641,12 @@ class _PricingScreenState extends State<PricingScreen> {
                 subtitle: Text(fee.isEnabled ? 'Enabled' : 'Disabled'),
                 trailing: FilledButton.tonal(
                   onPressed: () => _editServiceFee(fee),
-                  child: Text('INR ${fee.amount.toStringAsFixed(0)}'),
+                  child: Text(
+                    CurrencyFormatter.formatAmountForContext(
+                      context,
+                      fee.amount,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -659,7 +720,10 @@ class _PricingScreenState extends State<PricingScreen> {
                               label: 'Value',
                               value: campaign.discountType == PricingDiscountType.percent
                                   ? '${campaign.discountValue.toStringAsFixed(0)}%'
-                                  : 'INR ${campaign.discountValue.toStringAsFixed(0)}',
+                                  : CurrencyFormatter.formatAmountForContext(
+                                      context,
+                                      campaign.discountValue,
+                                    ),
                             ),
                             _CampaignMeta(
                               label: 'Scope',
@@ -667,7 +731,10 @@ class _PricingScreenState extends State<PricingScreen> {
                             ),
                             _CampaignMeta(
                               label: 'Min Order',
-                              value: 'INR ${campaign.minOrderAmount.toStringAsFixed(0)}',
+                              value: CurrencyFormatter.formatAmountForContext(
+                                context,
+                                campaign.minOrderAmount,
+                              ),
                             ),
                             _CampaignMeta(
                               label: 'Updated',
@@ -729,7 +796,9 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text(
+                              '${machine.name} • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
+                            ),
                           ),
                         )
                         .toList(),
@@ -749,7 +818,9 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text(
+                              '${machine.name} • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
+                            ),
                           ),
                         )
                         .toList(),
@@ -769,7 +840,9 @@ class _PricingScreenState extends State<PricingScreen> {
                         .map(
                           (machine) => DropdownMenuItem<int?>(
                             value: machine.id,
-                            child: Text('${machine.name} • INR ${machine.price.toStringAsFixed(0)}'),
+                            child: Text(
+                              '${machine.name} • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
+                            ),
                           ),
                         )
                         .toList(),
@@ -847,7 +920,10 @@ class _PricingScreenState extends State<PricingScreen> {
                   title: Text(line.label),
                   subtitle: Text(line.type),
                   trailing: Text(
-                    'INR ${line.amount.toStringAsFixed(0)}',
+                    CurrencyFormatter.formatAmountForContext(
+                      context,
+                      line.amount,
+                    ),
                     style: TextStyle(
                       color: line.amount < 0 ? const Color(0xFFB42318) : null,
                       fontWeight: FontWeight.w600,
@@ -999,7 +1075,7 @@ class _QuoteMetric extends StatelessWidget {
           Text(label),
           const SizedBox(height: 8),
           Text(
-            'INR ${value.toStringAsFixed(0)}',
+            CurrencyFormatter.formatAmountForContext(context, value),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: tone,
                   fontWeight: FontWeight.w700,

@@ -36,12 +36,6 @@ class BackendPosRepository implements PosRepository {
   static const _pickupTasksKey = 'backend_pickup_tasks_v1';
   static const _dayEndCheckoutCounterKey =
       'backend_day_end_checkout_counter_v1';
-  static const _staffMembersKey = 'backend_staff_members_v1';
-  static const _staffShiftsKey = 'backend_staff_shifts_v1';
-  static const _staffLeaveRequestsKey = 'backend_staff_leave_requests_v1';
-  static const _staffPayoutsKey = 'backend_staff_payouts_v1';
-  static const _staffShiftCounterKey = 'backend_staff_shift_counter_v1';
-  static const _staffPayoutCounterKey = 'backend_staff_payout_counter_v1';
 
   final BackendApiClient _apiClient;
   final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
@@ -935,51 +929,10 @@ class BackendPosRepository implements PosRepository {
 
   @override
   Future<List<StaffMember>> getStaffMembers() async {
-    final raw = await _preferences.getString(_staffMembersKey);
-    if (raw != null && raw.isNotEmpty) {
-      return (jsonDecode(raw) as List<dynamic>)
-          .map((item) => StaffMember.fromJson(item as Map<String, dynamic>))
-          .toList();
-    }
-    final seeded = const [
-      StaffMember(
-        id: 1,
-        fullName: 'Store Admin',
-        role: StaffRole.admin,
-        phone: '9999999999',
-        hourlyRate: 220,
-        isActive: true,
-      ),
-      StaffMember(
-        id: 2,
-        fullName: 'Kiran Patel',
-        role: StaffRole.cashier,
-        phone: '9876500011',
-        hourlyRate: 120,
-        isActive: true,
-      ),
-      StaffMember(
-        id: 3,
-        fullName: 'Meera Shah',
-        role: StaffRole.manager,
-        phone: '9876500012',
-        hourlyRate: 180,
-        isActive: true,
-      ),
-      StaffMember(
-        id: 4,
-        fullName: 'Ravi Solanki',
-        role: StaffRole.technician,
-        phone: '9876500013',
-        hourlyRate: 150,
-        isActive: true,
-      ),
-    ];
-    await _preferences.setString(
-      _staffMembersKey,
-      jsonEncode(seeded.map((item) => item.toJson()).toList()),
-    );
-    return seeded;
+    final items = await _apiClient.getJsonList('/staff/members');
+    return items
+        .map((item) => decodeStaffMember(item as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -987,36 +940,16 @@ class BackendPosRepository implements PosRepository {
     required DateTime start,
     required DateTime end,
   }) async {
-    final raw = await _preferences.getString(_staffShiftsKey);
-    final seeded = [
-      StaffShift(
-        id: 1,
-        staffId: 2,
-        shiftDate: DateTime.now(),
-        startTimeLabel: '08:00',
-        endTimeLabel: '16:00',
-        branch: 'Main Branch',
-        assignment: 'Front counter and handover',
-        hours: 8,
-      ),
-    ];
-    final shifts = raw == null || raw.isEmpty
-        ? seeded
-        : (jsonDecode(raw) as List<dynamic>)
-            .map((item) => StaffShift.fromJson(item as Map<String, dynamic>))
-            .toList();
-    if (raw == null || raw.isEmpty) {
-      await _preferences.setString(
-        _staffShiftsKey,
-        jsonEncode(shifts.map((item) => item.toJson()).toList()),
-      );
-      await _preferences.setInt(_staffShiftCounterKey, shifts.length);
-    }
-    return shifts.where((item) {
-      final day = DateTime(
-          item.shiftDate.year, item.shiftDate.month, item.shiftDate.day);
-      return !day.isBefore(start) && day.isBefore(end);
-    }).toList();
+    final items = await _apiClient.getJsonList(
+      '/staff/shifts',
+      queryParameters: {
+        'start': start.toIso8601String(),
+        'end': end.toIso8601String(),
+      },
+    );
+    return items
+        .map((item) => decodeStaffShift(item as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -1030,70 +963,37 @@ class BackendPosRepository implements PosRepository {
     required String assignment,
     required double hours,
   }) async {
-    final allShifts = await getStaffShifts(
-      start: DateTime(2024),
-      end: DateTime(2035),
+    final item = await _apiClient.postJson(
+      '/staff/shifts',
+      body: {
+        if (shiftId != null) 'shiftId': shiftId,
+        'staffId': staffId,
+        'shiftDate': DateTime(
+          shiftDate.year,
+          shiftDate.month,
+          shiftDate.day,
+        ).toIso8601String(),
+        'startTimeLabel': startTimeLabel,
+        'endTimeLabel': endTimeLabel,
+        'branch': branch,
+        'assignment': assignment,
+        'hours': hours,
+      },
     );
-    final counter =
-        await _preferences.getInt(_staffShiftCounterKey) ?? allShifts.length;
-    final shift = StaffShift(
-      id: shiftId ?? counter + 1,
-      staffId: staffId,
-      shiftDate: DateTime(shiftDate.year, shiftDate.month, shiftDate.day),
-      startTimeLabel: startTimeLabel,
-      endTimeLabel: endTimeLabel,
-      branch: branch,
-      assignment: assignment,
-      hours: hours,
-    );
-    final index = allShifts.indexWhere((item) => item.id == shift.id);
-    if (index >= 0) {
-      allShifts[index] = shift;
-    } else {
-      allShifts.add(shift);
-      await _preferences.setInt(_staffShiftCounterKey, shift.id);
-    }
-    await _preferences.setString(
-      _staffShiftsKey,
-      jsonEncode(allShifts.map((item) => item.toJson()).toList()),
-    );
-    return shift;
+    return decodeStaffShift(item);
   }
 
   @override
   Future<List<StaffLeaveRequest>> getStaffLeaveRequests(
       {String? status}) async {
-    final raw = await _preferences.getString(_staffLeaveRequestsKey);
-    final seeded = [
-      StaffLeaveRequest(
-        id: 1,
-        staffId: 2,
-        staffName: 'Kiran Patel',
-        leaveType: 'Casual Leave',
-        startDate: DateTime.now().add(const Duration(days: 3)),
-        endDate: DateTime.now().add(const Duration(days: 4)),
-        status: StaffLeaveStatus.pending,
-        reason: 'Family function out of town.',
-        requestedAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-    ];
-    final items = raw == null || raw.isEmpty
-        ? seeded
-        : (jsonDecode(raw) as List<dynamic>)
-            .map(
-              (item) =>
-                  StaffLeaveRequest.fromJson(item as Map<String, dynamic>),
-            )
-            .toList();
-    if (raw == null || raw.isEmpty) {
-      await _preferences.setString(
-        _staffLeaveRequestsKey,
-        jsonEncode(items.map((item) => item.toJson()).toList()),
-      );
-    }
+    final items = await _apiClient.getJsonList(
+      '/staff/leave-requests',
+      queryParameters: {
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+    );
     return items
-        .where(
-            (item) => status == null || status.isEmpty || item.status == status)
+        .map((item) => decodeStaffLeaveRequest(item as Map<String, dynamic>))
         .toList();
   }
 
@@ -1103,31 +1003,25 @@ class BackendPosRepository implements PosRepository {
     required String status,
     String? reviewedByName,
   }) async {
-    final items = await getStaffLeaveRequests();
-    final index = items.indexWhere((item) => item.id == leaveRequestId);
-    if (index == -1) {
+    try {
+      final item = await _apiClient.patchJson(
+        '/staff/leave-requests/$leaveRequestId',
+        body: {
+          'status': status,
+          'reviewedByName': reviewedByName,
+        },
+      );
+      return decodeStaffLeaveRequest(item);
+    } on BackendApiException {
       return null;
     }
-    final updated = items[index].copyWith(
-      status: status,
-      reviewedByName: reviewedByName,
-    );
-    items[index] = updated;
-    await _preferences.setString(
-      _staffLeaveRequestsKey,
-      jsonEncode(items.map((item) => item.toJson()).toList()),
-    );
-    return updated;
   }
 
   @override
   Future<List<StaffPayout>> getStaffPayouts() async {
-    final raw = await _preferences.getString(_staffPayoutsKey);
-    if (raw == null || raw.isEmpty) {
-      return const [];
-    }
-    return (jsonDecode(raw) as List<dynamic>)
-        .map((item) => StaffPayout.fromJson(item as Map<String, dynamic>))
+    final items = await _apiClient.getJsonList('/staff/payouts');
+    return items
+        .map((item) => decodeStaffPayout(item as Map<String, dynamic>))
         .toList();
   }
 
@@ -1139,50 +1033,26 @@ class BackendPosRepository implements PosRepository {
     required double bonusAmount,
     required double deductionsAmount,
   }) async {
-    final staff =
-        (await getStaffMembers()).firstWhere((item) => item.id == staffId);
-    final items = await getStaffPayouts();
-    final counter =
-        await _preferences.getInt(_staffPayoutCounterKey) ?? items.length;
-    final grossAmount = staff.hourlyRate * hoursWorked;
-    final payout = StaffPayout(
-      id: counter + 1,
-      staffId: staffId,
-      staffName: staff.fullName,
-      periodLabel: periodLabel,
-      hoursWorked: hoursWorked,
-      grossAmount: grossAmount,
-      bonusAmount: bonusAmount,
-      deductionsAmount: deductionsAmount,
-      netAmount: grossAmount + bonusAmount - deductionsAmount,
-      status: StaffPayoutStatus.scheduled,
-      createdAt: DateTime.now(),
+    final item = await _apiClient.postJson(
+      '/staff/payouts',
+      body: {
+        'staffId': staffId,
+        'periodLabel': periodLabel,
+        'hoursWorked': hoursWorked,
+        'bonusAmount': bonusAmount,
+        'deductionsAmount': deductionsAmount,
+      },
     );
-    items.add(payout);
-    await _preferences.setInt(_staffPayoutCounterKey, payout.id);
-    await _preferences.setString(
-      _staffPayoutsKey,
-      jsonEncode(items.map((item) => item.toJson()).toList()),
-    );
-    return payout;
+    return decodeStaffPayout(item);
   }
 
   @override
   Future<StaffPayout?> markStaffPayoutPaid({required int payoutId}) async {
-    final items = await getStaffPayouts();
-    final index = items.indexWhere((item) => item.id == payoutId);
-    if (index == -1) {
+    try {
+      final item = await _apiClient.postJson('/staff/payouts/$payoutId/pay');
+      return decodeStaffPayout(item);
+    } on BackendApiException {
       return null;
     }
-    final updated = items[index].copyWith(
-      status: StaffPayoutStatus.paid,
-      paidAt: DateTime.now(),
-    );
-    items[index] = updated;
-    await _preferences.setString(
-      _staffPayoutsKey,
-      jsonEncode(items.map((item) => item.toJson()).toList()),
-    );
-    return updated;
   }
 }

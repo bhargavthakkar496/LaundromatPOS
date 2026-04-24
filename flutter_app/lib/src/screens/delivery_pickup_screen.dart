@@ -9,6 +9,7 @@ import '../models/order.dart';
 import '../models/order_history_item.dart';
 import '../models/pickup_task.dart';
 import '../models/pos_user.dart';
+import '../services/currency_formatter.dart';
 import '../services/open_external_url.dart';
 import '../services/whatsapp_notification_service.dart';
 
@@ -39,6 +40,7 @@ class _DeliveryPickupScreenState extends State<DeliveryPickupScreen> {
   final Map<int, DeliveryTask> _deliveryTasksByOrderId = {};
   final Map<int, PickupTask> _pickupTasksByOrderId = {};
   bool _loading = true;
+  String? _loadError;
   int? _markingPickupMachineId;
   int? _updatingPickupOrderId;
   int? _updatingDeliveryOrderId;
@@ -54,38 +56,51 @@ class _DeliveryPickupScreenState extends State<DeliveryPickupScreen> {
     if (showLoading && mounted) {
       setState(() {
         _loading = true;
+        _loadError = null;
       });
     }
 
-    final results = await Future.wait([
-      widget.repository.getMachines(),
-      widget.repository.getOrderHistory(),
-      widget.repository.getDeliveryTasks(),
-      widget.repository.getPickupTasks(),
-    ]);
+    try {
+      final results = await Future.wait([
+        widget.repository.getMachines(),
+        widget.repository.getOrderHistory(),
+        widget.repository.getDeliveryTasks(),
+        widget.repository.getPickupTasks(),
+      ]);
 
-    final machines = results[0] as List<Machine>;
-    final history = results[1] as List<OrderHistoryItem>;
-    final tasks = results[2] as List<DeliveryTask>;
-    final pickupTasks = results[3] as List<PickupTask>;
-    _deliveryTasksByOrderId
-      ..clear()
-      ..addEntries(tasks.map((task) => MapEntry(task.orderId, task)));
-    _pickupTasksByOrderId
-      ..clear()
-      ..addEntries(pickupTasks.map((task) => MapEntry(task.orderId, task)));
-    await _seedMissingDeliveryTasks(history);
-    await _seedMissingPickupTasks(machines, history);
+      final machines = results[0] as List<Machine>;
+      final history = results[1] as List<OrderHistoryItem>;
+      final tasks = results[2] as List<DeliveryTask>;
+      final pickupTasks = results[3] as List<PickupTask>;
+      _deliveryTasksByOrderId
+        ..clear()
+        ..addEntries(tasks.map((task) => MapEntry(task.orderId, task)));
+      _pickupTasksByOrderId
+        ..clear()
+        ..addEntries(pickupTasks.map((task) => MapEntry(task.orderId, task)));
+      await _seedMissingDeliveryTasks(history);
+      await _seedMissingPickupTasks(machines, history);
 
-    if (!mounted) {
-      return;
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _machines = machines;
+        _history = history;
+        _loading = false;
+        _loadError = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _loadError =
+            'Delivery and pickup data could not be loaded right now. Check backend connectivity and try again.';
+      });
     }
-
-    setState(() {
-      _machines = machines;
-      _history = history;
-      _loading = false;
-    });
   }
 
   Future<void> _seedMissingPickupTasks(
@@ -508,7 +523,34 @@ class _DeliveryPickupScreenState extends State<DeliveryPickupScreen> {
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
+            : _loadError != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.sync_problem_outlined,
+                            size: 40,
+                            color: Color(0xFFB45309),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _loadError!,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: _loadData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : TabBarView(
                 children: [
                   ListView(
                     padding: const EdgeInsets.all(20),
@@ -644,8 +686,8 @@ class _DeliveryPickupScreenState extends State<DeliveryPickupScreen> {
                         ),
                     ],
                   ),
-                ],
-              ),
+                    ],
+                  ),
       ),
     );
   }
@@ -809,7 +851,7 @@ class _PickupTaskCard extends StatelessWidget {
                 Text('${l10n.phone}: ${item.historyItem.customer.phone}'),
                 Text('${l10n.ref}: ${item.historyItem.order.paymentReference}'),
                 Text(
-                    '${l10n.amount}: INR ${item.historyItem.order.amount.toStringAsFixed(0)}'),
+                    '${l10n.amount}: ${CurrencyFormatter.formatAmountForContext(context, item.historyItem.order.amount)}'),
                 Text(dateTimeFormat.format(item.historyItem.order.timestamp)),
               ],
             ),
@@ -901,7 +943,7 @@ class _DeliveryTaskCard extends StatelessWidget {
                 Text('${l10n.machine}: ${item.historyItem.machine.name}'),
                 Text('${l10n.ref}: ${item.historyItem.order.paymentReference}'),
                 Text(
-                    '${l10n.amount}: INR ${item.historyItem.order.amount.toStringAsFixed(0)}'),
+                    '${l10n.amount}: ${CurrencyFormatter.formatAmountForContext(context, item.historyItem.order.amount)}'),
                 Text('${l10n.window}: ${item.task.windowLabel}'),
                 if ((item.task.assignedDriver ?? '').isNotEmpty)
                   Text('${l10n.driver}: ${item.task.assignedDriver}'),

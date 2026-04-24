@@ -6,6 +6,7 @@ import '../localization/app_localizations.dart';
 import '../models/order_history_item.dart';
 import '../models/pos_user.dart';
 import '../models/refund_request.dart';
+import '../services/currency_formatter.dart';
 import '../services/open_external_url.dart';
 import '../services/whatsapp_notification_service.dart';
 
@@ -103,7 +104,10 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
     final phone =
         WhatsAppNotificationService.normalizePhone(item.customer.phone);
     final message = Uri.encodeComponent(
-      WhatsAppNotificationService.buildRefundProcessedMessage(item),
+      WhatsAppNotificationService.buildRefundProcessedMessage(
+        item,
+        locale: Localizations.localeOf(context),
+      ),
     );
     final url = Uri.parse('https://wa.me/$phone?text=$message');
     final launched = await openExternalUrl(url);
@@ -192,7 +196,10 @@ class _RefundRequestsScreenState extends State<RefundRequestsScreen> {
                               label: 'Pending', value: '${pending.length}'),
                           _QueueMetric(
                             label: 'Pending Amount',
-                            value: 'INR ${pendingAmount.toStringAsFixed(0)}',
+                            value: CurrencyFormatter.formatAmountForContext(
+                              context,
+                              pendingAmount,
+                            ),
                           ),
                           _QueueMetric(
                             label: 'Processed',
@@ -359,7 +366,9 @@ class _RefundRequestCard extends StatelessWidget {
               runSpacing: 10,
               children: [
                 Text('Phone: ${request.customerPhone}'),
-                Text('Amount: INR ${request.amount.toStringAsFixed(0)}'),
+                Text(
+                  'Amount: ${CurrencyFormatter.formatAmountForContext(context, request.amount)}',
+                ),
                 Text('Method: ${request.paymentMethod}'),
                 Text('Ref: ${request.paymentReference}'),
                 if ((request.requestedByName ?? '').isNotEmpty)

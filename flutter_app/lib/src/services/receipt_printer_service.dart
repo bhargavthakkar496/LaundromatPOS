@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_sunmi_printer_plus/column_maker.dart';
 import 'package:flutter_sunmi_printer_plus/enums.dart';
 import 'package:flutter_sunmi_printer_plus/flutter_sunmi_printer_plus.dart';
 import 'package:flutter_sunmi_printer_plus/sunmi_style.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/receipt_data.dart';
 import 'receipt_service.dart';
@@ -12,6 +15,7 @@ import 'taffeta_tag_service.dart';
 
 enum ReceiptPrintMode {
   embedded,
+  direct,
   systemPreview,
 }
 
@@ -141,11 +145,17 @@ class ReceiptPrinterDiagnostics {
 class ReceiptPrinterService {
   static const MethodChannel _channel =
       MethodChannel('washpos/receipt_printer');
+  static const _windowsPrinterUrlKey = 'windows_receipt_printer_url_v1';
+  static const _windowsPrinterNameKey = 'windows_receipt_printer_name_v1';
+  static final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
 
   static bool get supportsNativePrinterDiagnostics =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   static bool get supportsPrintSettings => supportsNativePrinterDiagnostics;
+
+  static bool get supportsPrinterSelection =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   static Future<bool> openPrintSettings() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
@@ -161,11 +171,26 @@ class ReceiptPrinterService {
     }
   }
 
-  static Future<ReceiptPrintResult> printReceipt(ReceiptData receipt) async {
+  static Future<ReceiptPrintResult> printReceipt(
+    ReceiptData receipt, {
+    Locale locale = const Locale('en'),
+  }) async {
     final diagnostics = await getDiagnostics();
 
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      final printerName = await _printPdfDirectToWindowsPrinter(
+        bytes: await ReceiptService.buildReceiptPdf(receipt, locale: locale),
+        jobName: 'receipt-order-${receipt.order.id}',
+        format: PdfPageFormat.roll80,
+      );
+      return ReceiptPrintResult(
+        mode: ReceiptPrintMode.direct,
+        message: printerName,
+      );
+    }
+
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      await _printPdfPreview(receipt);
+      await _printPdfPreview(receipt, locale: locale);
       return ReceiptPrintResult(
         mode: ReceiptPrintMode.systemPreview,
         message: diagnostics.enabledPrintServices.isEmpty
@@ -176,7 +201,7 @@ class ReceiptPrinterService {
 
     if (diagnostics.sunmiEmbeddedPrinterAvailable) {
       try {
-        await _printWithEmbeddedPrinter(receipt);
+        await _printWithEmbeddedPrinter(receipt, locale: locale);
         return const ReceiptPrintResult(mode: ReceiptPrintMode.embedded);
       } on MissingPluginException {
         // Continue to the final no-path error below.
@@ -185,7 +210,7 @@ class ReceiptPrinterService {
       }
     }
 
-    await _printPdfPreview(receipt);
+    await _printPdfPreview(receipt, locale: locale);
     return const ReceiptPrintResult(
       mode: ReceiptPrintMode.systemPreview,
       message: 'system print dialog',
@@ -252,6 +277,18 @@ class ReceiptPrinterService {
     }
 
     final bytes = await TaffetaTagService.buildTagsPdf(receipt, jobs);
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      final printerName = await _printPdfDirectToWindowsPrinter(
+        bytes: bytes,
+        jobName: 'taffeta-tags-order-${receipt.order.id}',
+        format: TaffetaTagService.pdfPageFormat,
+      );
+      return ReceiptPrintResult(
+        mode: ReceiptPrintMode.direct,
+        message: printerName,
+      );
+    }
+
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: 'taffeta-tags-order-${receipt.order.id}',
@@ -322,7 +359,143 @@ class ReceiptPrinterService {
     }
   }
 
-  static Future<void> _printWithEmbeddedPrinter(ReceiptData receipt) async {
+  static Future<List<Printer>> getAvailableWindowsPrinters() async {
+    if (!supportsPrinterSelection) {
+      return const [];
+    }
+    final printers = await Printing.listPrinters();
+    printers.sort((left, right) {
+      if (left.isDefault && !right.isDefault) {
+        return -1;
+      }
+      if (!left.isDefault && right.isDefault) {
+        return 1;
+      }
+      return left.name.compareTo(right.name);
+    });
+    return printers.where((printer) => printer.isAvailable).toList();
+  }
+
+  static Future<Printer?> getSelectedWindowsPrinter() async {
+    if (!supportsPrinterSelection) {
+      return null;
+    }
+
+    final printers = await getAvailableWindowsPrinters();
+    if (printers.isEmpty) {
+      return null;
+    }
+
+    final savedUrl = await _preferences.getString(_windowsPrinterUrlKey);
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      for (final printer in printers) {
+        if (printer.url == savedUrl) {
+          return printer;
+        }
+      }
+    }
+
+    final preferred = _preferredWindowsPrinter(printers);
+    if (preferred != null) {
+      await _saveWindowsPrinter(preferred);
+    }
+    return preferred;
+  }
+
+  static Future<Printer?> chooseWindowsPrinter(BuildContext context) async {
+    if (!supportsPrinterSelection) {
+      return null;
+    }
+
+    final printer = await Printing.pickPrinter(
+      context: context,
+      title: 'Select Receipt Printer',
+    );
+    if (printer == null) {
+      return null;
+    }
+
+    await _saveWindowsPrinter(printer);
+    return printer;
+  }
+
+  static Future<void> _saveWindowsPrinter(Printer printer) async {
+    await _preferences.setString(_windowsPrinterUrlKey, printer.url);
+    await _preferences.setString(_windowsPrinterNameKey, printer.name);
+  }
+
+  static Printer? _preferredWindowsPrinter(List<Printer> printers) {
+    if (printers.isEmpty) {
+      return null;
+    }
+
+    for (final printer in printers) {
+      if (_looksLikeReceiptPrinter(printer)) {
+        return printer;
+      }
+    }
+
+    for (final printer in printers) {
+      if (printer.isDefault) {
+        return printer;
+      }
+    }
+
+    return printers.first;
+  }
+
+  static bool _looksLikeReceiptPrinter(Printer printer) {
+    final descriptor = [
+      printer.name,
+      printer.model ?? '',
+      printer.comment ?? '',
+    ].join(' ').toLowerCase();
+    return descriptor.contains('pos') ||
+        descriptor.contains('thermal') ||
+        descriptor.contains('receipt') ||
+        descriptor.contains('hprt') ||
+        descriptor.contains('xprinter') ||
+        descriptor.contains('80');
+  }
+
+  static Future<String> _printPdfDirectToWindowsPrinter({
+    required Uint8List bytes,
+    required String jobName,
+    required PdfPageFormat format,
+  }) async {
+    final printer = await getSelectedWindowsPrinter();
+    if (printer == null) {
+      throw PlatformException(
+        code: 'windows_printer_unavailable',
+        message:
+            'No Windows receipt printer is configured. Use Select Printer to choose the attached USB receipt printer.',
+      );
+    }
+
+    final printed = await Printing.directPrintPdf(
+      printer: printer,
+      onLayout: (_) async => bytes,
+      name: jobName,
+      format: format,
+      dynamicLayout: false,
+      usePrinterSettings: true,
+    );
+
+    if (!printed) {
+      throw PlatformException(
+        code: 'windows_direct_print_failed',
+        message:
+            'Windows could not complete the print job for ${printer.name}. Check that the printer is online and has paper.',
+      );
+    }
+
+    return printer.name;
+  }
+
+  static Future<void> _printWithEmbeddedPrinter(
+    ReceiptData receipt, {
+    Locale locale = const Locale('en'),
+  }) async {
     final connected = await SunmiPrinter.initPrinter() ?? false;
     if (!connected) {
       throw PlatformException(
@@ -432,7 +605,13 @@ class ReceiptPrinterService {
       cols: [
         ColumnMaker(text: 'Amount Paid', width: 7),
         ColumnMaker(
-          text: 'INR ${receipt.order.amount.toStringAsFixed(0)}',
+          text: ReceiptService.buildPrinterTextReceipt(
+            receipt,
+            locale: locale,
+          ).split('\n').firstWhere(
+                (line) => line.startsWith('Amount Paid:'),
+                orElse: () => 'Amount Paid:',
+              ).replaceFirst('Amount Paid: ', ''),
           width: 5,
           align: SunmiPrintAlign.RIGHT,
         ),
@@ -452,8 +631,11 @@ class ReceiptPrinterService {
     await SunmiPrinter.feedPaper();
   }
 
-  static Future<void> _printPdfPreview(ReceiptData receipt) async {
-    final bytes = await ReceiptService.buildReceiptPdf(receipt);
+  static Future<void> _printPdfPreview(
+    ReceiptData receipt, {
+    Locale locale = const Locale('en'),
+  }) async {
+    final bytes = await ReceiptService.buildReceiptPdf(receipt, locale: locale);
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: 'receipt-order-${receipt.order.id}',

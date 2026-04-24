@@ -9,6 +9,7 @@ import '../models/payment_session.dart';
 import '../models/pos_user.dart';
 import '../models/receipt_data.dart';
 import '../services/open_external_url.dart';
+import '../services/currency_formatter.dart';
 import '../services/whatsapp_notification_service.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
@@ -54,7 +55,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       receipt.customer.phone,
     );
     final message = Uri.encodeComponent(
-      WhatsAppNotificationService.buildPaymentSuccessMessage(receipt),
+      WhatsAppNotificationService.buildPaymentSuccessMessage(
+        receipt,
+        locale: Localizations.localeOf(context),
+      ),
     );
     final url = Uri.parse('https://wa.me/$phone?text=$message');
     final launched = await openExternalUrl(url);
@@ -162,8 +166,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final amount = widget.machine.price.toStringAsFixed(0);
-
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.checkout)),
       body: Form(
@@ -193,7 +195,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Text(
                         '${widget.machine.type} • ${widget.machine.capacityKg}kg'),
                     const SizedBox(height: 8),
-                    Text('Amount: INR $amount'),
+                    Text(
+                      'Amount: ${CurrencyFormatter.formatAmountForContext(context, widget.machine.price)}',
+                    ),
                   ],
                 ),
               ),

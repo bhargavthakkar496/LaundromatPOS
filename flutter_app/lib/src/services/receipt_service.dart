@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/receipt_data.dart';
+import 'currency_formatter.dart';
 
 class ReceiptService {
   static final DateFormat _dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
@@ -32,7 +34,10 @@ class ReceiptService {
     return buffer.toString();
   }
 
-  static String buildWhatsAppMessage(ReceiptData receipt) {
+  static String buildWhatsAppMessage(
+    ReceiptData receipt, {
+    required Locale locale,
+  }) {
     final lines = [
       'WashPOS Receipt',
       'Order #${receipt.order.id}',
@@ -40,7 +45,7 @@ class ReceiptService {
       'Phone: ${receipt.customer.phone}',
       'Machine: ${receipt.machine.name}',
       'Type: ${receipt.machine.type} • ${receipt.machine.capacityKg}kg',
-      'Amount: INR ${receipt.order.amount.toStringAsFixed(0)}',
+      'Amount: ${CurrencyFormatter.formatAmount(receipt.order.amount, locale)}',
       'Payment: ${receipt.order.paymentMethod}',
       'Reference: ${receipt.order.paymentReference}',
       'Date: ${formatReceiptDate(receipt.order.timestamp)}',
@@ -50,7 +55,10 @@ class ReceiptService {
     return lines.join('\n');
   }
 
-  static String buildPrinterTextReceipt(ReceiptData receipt) {
+  static String buildPrinterTextReceipt(
+    ReceiptData receipt, {
+    required Locale locale,
+  }) {
     final lines = <String>[
       'WashPOS',
       'Payment Receipt',
@@ -64,7 +72,7 @@ class ReceiptService {
       'Payment: ${receipt.order.paymentMethod}',
       'Reference: ${receipt.order.paymentReference}',
       '--------------------------------',
-      'Amount Paid: INR ${receipt.order.amount.toStringAsFixed(0)}',
+      'Amount Paid: ${CurrencyFormatter.formatAmount(receipt.order.amount, locale)}',
       '',
       'Thank you for your payment.',
       'Please keep this slip for your records.',
@@ -76,7 +84,10 @@ class ReceiptService {
     return lines.join('\n');
   }
 
-  static Future<Uint8List> buildReceiptPdf(ReceiptData receipt) async {
+  static Future<Uint8List> buildReceiptPdf(
+    ReceiptData receipt, {
+    required Locale locale,
+  }) async {
     final document = pw.Document();
 
     document.addPage(
@@ -115,7 +126,7 @@ class ReceiptService {
               pw.Divider(),
               _row(
                 'Amount Paid',
-                'INR ${receipt.order.amount.toStringAsFixed(0)}',
+                CurrencyFormatter.formatAmount(receipt.order.amount, locale),
                 bold: true,
               ),
               pw.SizedBox(height: 16),

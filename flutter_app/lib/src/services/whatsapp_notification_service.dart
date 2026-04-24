@@ -1,17 +1,23 @@
+import 'package:flutter/material.dart';
+
 import '../models/order_history_item.dart';
 import '../models/receipt_data.dart';
+import 'currency_formatter.dart';
 
 class WhatsAppNotificationService {
   static String normalizePhone(String phone) {
     return phone.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
-  static String buildPaymentSuccessMessage(ReceiptData receipt) {
+  static String buildPaymentSuccessMessage(
+    ReceiptData receipt, {
+    required Locale locale,
+  }) {
     return [
       'Payment successful for your laundromat order.',
       'Order #${receipt.order.id}',
       'Machine: ${receipt.machine.name}',
-      'Amount paid: INR ${receipt.order.amount.toStringAsFixed(0)}',
+      'Amount paid: ${CurrencyFormatter.formatAmount(receipt.order.amount, locale)}',
       'Payment method: ${receipt.order.paymentMethod}',
       'Reference: ${receipt.order.paymentReference}',
       'Your cycle has been started.',
@@ -41,11 +47,14 @@ class WhatsAppNotificationService {
     ].join('\n');
   }
 
-  static String buildRefundProcessedMessage(OrderHistoryItem item) {
+  static String buildRefundProcessedMessage(
+    OrderHistoryItem item, {
+    required Locale locale,
+  }) {
     return [
       'Your refund has been processed.',
       'Order #${item.order.id}',
-      'Amount refunded: INR ${item.order.amount.toStringAsFixed(0)}',
+      'Amount refunded: ${CurrencyFormatter.formatAmount(item.order.amount, locale)}',
       'Original reference: ${item.order.paymentReference}',
       'Please contact support if you do not see the refund shortly.',
     ].join('\n');

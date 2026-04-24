@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/staff.dart';
+import '../services/currency_formatter.dart';
 
 class StaffManagementScreen extends StatefulWidget {
   const StaffManagementScreen({
@@ -462,7 +463,10 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                             _StaffMetricPill(
                               label: 'Scheduled Payouts',
                               value:
-                                  'INR ${scheduledPayoutTotal.toStringAsFixed(0)}',
+                                  CurrencyFormatter.formatAmountForContext(
+                                    context,
+                                    scheduledPayoutTotal,
+                                  ),
                             ),
                           ],
                         ),
@@ -725,12 +729,14 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                       children: [
                         Text('Hours: ${payout.hoursWorked.toStringAsFixed(1)}'),
                         Text(
-                            'Gross: INR ${payout.grossAmount.toStringAsFixed(0)}'),
+                            'Gross: ${CurrencyFormatter.formatAmountForContext(context, payout.grossAmount)}'),
                         Text(
-                            'Bonus: INR ${payout.bonusAmount.toStringAsFixed(0)}'),
+                            'Bonus: ${CurrencyFormatter.formatAmountForContext(context, payout.bonusAmount)}'),
                         Text(
-                            'Deductions: INR ${payout.deductionsAmount.toStringAsFixed(0)}'),
-                        Text('Net: INR ${payout.netAmount.toStringAsFixed(0)}'),
+                            'Deductions: ${CurrencyFormatter.formatAmountForContext(context, payout.deductionsAmount)}'),
+                        Text(
+                          'Net: ${CurrencyFormatter.formatAmountForContext(context, payout.netAmount)}',
+                        ),
                       ],
                     ),
                     if (payout.paidAt != null) ...[

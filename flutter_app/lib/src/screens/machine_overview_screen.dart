@@ -8,6 +8,7 @@ import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
+import '../services/currency_formatter.dart';
 import '../services/open_external_url.dart';
 import '../services/whatsapp_notification_service.dart';
 import '../ui/tokens/app_colors.dart';
@@ -146,7 +147,7 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${machine.type} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                              '${machine.type} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
                               style: Theme.of(sheetContext).textTheme.bodyLarge,
                             ),
                           ],
@@ -873,7 +874,7 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${machine.type} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                          '${machine.type} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -926,7 +927,10 @@ class _MachineOverviewScreenState extends State<MachineOverviewScreen> {
                   ),
                   MetaPill(
                     label: 'Price',
-                    value: 'INR ${machine.price.toStringAsFixed(0)}',
+                    value: CurrencyFormatter.formatAmountForContext(
+                      context,
+                      machine.price,
+                    ),
                   ),
                   if (machine.isInUse)
                     MetaPill(

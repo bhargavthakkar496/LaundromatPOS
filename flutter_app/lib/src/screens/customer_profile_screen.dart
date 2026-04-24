@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/customer_profile.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
 
@@ -280,7 +281,10 @@ class _CustomerProfileView extends StatelessWidget {
                     Expanded(
                       child: _StatTile(
                         label: 'Spent',
-                        value: 'INR ${profile.totalSpent.toStringAsFixed(0)}',
+                        value: CurrencyFormatter.formatAmountForContext(
+                          context,
+                          profile.totalSpent,
+                        ),
                       ),
                     ),
                   ],
@@ -381,7 +385,7 @@ class _CustomerProfileView extends StatelessWidget {
               child: ListTile(
                 leading: MachineIcon(machine: item.machine),
                 title: Text(
-                  '${item.machine.name} • INR ${item.order.amount.toStringAsFixed(0)}',
+                  '${item.machine.name} • ${CurrencyFormatter.formatAmountForContext(context, item.order.amount)}',
                 ),
                 subtitle: Text(
                   '${item.order.paymentMethod} • ${dateFormat.format(item.order.timestamp)}',

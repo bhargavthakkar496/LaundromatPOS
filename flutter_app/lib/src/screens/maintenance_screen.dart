@@ -5,6 +5,7 @@ import '../data/pos_repository.dart';
 import '../models/maintenance.dart';
 import '../models/machine.dart';
 import '../models/pos_user.dart';
+import '../services/currency_formatter.dart';
 
 class MaintenanceScreen extends StatefulWidget {
   const MaintenanceScreen({
@@ -485,7 +486,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                     child: ListTile(
                       title: Text(machine.name),
                       subtitle: Text(
-                          '${machine.type} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}'),
+                          '${machine.type} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}'),
                       trailing: FilledButton.tonalIcon(
                         onPressed: _creatingMachineId == machine.id
                             ? null

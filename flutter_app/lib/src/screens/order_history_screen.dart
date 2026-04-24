@@ -5,6 +5,7 @@ import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/order_history_item.dart';
 import '../models/order.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/machine_icon.dart';
 
 class OrderHistoryScreen extends StatelessWidget {
@@ -57,7 +58,7 @@ class OrderHistoryScreen extends StatelessWidget {
                   title:
                       Text('${item.machine.name} • ${item.customer.fullName}'),
                   subtitle: Text(
-                    '${item.order.paymentMethod} • INR ${item.order.amount.toStringAsFixed(0)} • $formattedDate',
+                    '${item.order.paymentMethod} • ${CurrencyFormatter.formatAmountForContext(context, item.order.amount)} • $formattedDate',
                   ),
                   trailing: Text(
                     item.order.paymentStatus == PaymentStatus.refunded

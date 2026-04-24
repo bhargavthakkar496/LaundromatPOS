@@ -23,6 +23,7 @@ class _ReceiptActionsState extends State<ReceiptActions> {
   bool _printing = false;
   bool _printingTags = false;
   bool _openingPrintSettings = false;
+  bool _choosingPrinter = false;
 
   ReceiptData get receipt => widget.receipt;
 
@@ -31,10 +32,16 @@ class _ReceiptActionsState extends State<ReceiptActions> {
 
   bool get _showPrintSettings => ReceiptPrinterService.supportsPrintSettings;
 
+  bool get _showPrinterSelection =>
+      ReceiptPrinterService.supportsPrinterSelection;
+
   Future<void> _sendViaWhatsApp(BuildContext context) async {
     final phone = receipt.customer.phone.replaceAll(RegExp(r'[^0-9]'), '');
     final message = Uri.encodeComponent(
-      ReceiptService.buildWhatsAppMessage(receipt),
+      ReceiptService.buildWhatsAppMessage(
+        receipt,
+        locale: Localizations.localeOf(context),
+      ),
     );
     final url = Uri.parse('https://wa.me/$phone?text=$message');
 
@@ -57,14 +64,17 @@ class _ReceiptActionsState extends State<ReceiptActions> {
     });
 
     try {
-      final result = await ReceiptPrinterService.printReceipt(receipt);
+      final result = await ReceiptPrinterService.printReceipt(
+        receipt,
+        locale: Localizations.localeOf(context),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              result.mode == ReceiptPrintMode.embedded
-                  ? 'Receipt sent to the embedded printer${result.message == null || result.message!.isEmpty ? '' : ' via ${result.message}'}.'
-                  : 'Opened print preview${result.message == null || result.message!.isEmpty ? '' : ' via ${result.message}'}.',
+              result.mode == ReceiptPrintMode.systemPreview
+                  ? 'Opened print preview${result.message == null || result.message!.isEmpty ? '' : ' via ${result.message}'}.'
+                  : 'Receipt sent to ${result.message == null || result.message!.isEmpty ? 'the printer' : result.message}.',
             ),
           ),
         );
@@ -178,9 +188,9 @@ class _ReceiptActionsState extends State<ReceiptActions> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              result.mode == ReceiptPrintMode.embedded
-                  ? 'Started printing ${jobs.length} taffeta tag${jobs.length == 1 ? '' : 's'} on the embedded printer${usedFallbackManifest ? ' using a default order-level tag' : ''}.'
-                  : 'Opened print preview for ${jobs.length} taffeta tag${jobs.length == 1 ? '' : 's'}${usedFallbackManifest ? ' using a default order-level tag' : ''}.',
+              result.mode == ReceiptPrintMode.systemPreview
+                  ? 'Opened print preview for ${jobs.length} taffeta tag${jobs.length == 1 ? '' : 's'}${usedFallbackManifest ? ' using a default order-level tag' : ''}.'
+                  : 'Sent ${jobs.length} taffeta tag${jobs.length == 1 ? '' : 's'} to ${result.message == null || result.message!.isEmpty ? 'the printer' : result.message}${usedFallbackManifest ? ' using a default order-level tag' : ''}.',
             ),
           ),
         );
@@ -238,6 +248,43 @@ class _ReceiptActionsState extends State<ReceiptActions> {
     }
   }
 
+  Future<void> _choosePrinter(BuildContext context) async {
+    if (_choosingPrinter) {
+      return;
+    }
+
+    setState(() {
+      _choosingPrinter = true;
+    });
+
+    try {
+      final printer = await ReceiptPrinterService.chooseWindowsPrinter(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              printer == null
+                  ? 'Printer selection was cancelled.'
+                  : 'Selected printer: ${printer.name}',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not select printer: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _choosingPrinter = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -262,6 +309,17 @@ class _ReceiptActionsState extends State<ReceiptActions> {
             _printingTags ? 'Building Tags...' : 'Print Taffeta Tags',
           ),
         ),
+        if (_showPrinterSelection) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed:
+                _choosingPrinter ? null : () => _choosePrinter(context),
+            icon: const Icon(Icons.print_outlined),
+            label: Text(
+              _choosingPrinter ? 'Opening Printer List...' : 'Select Printer',
+            ),
+          ),
+        ],
         if (_showNativePrinterDiagnostics) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(

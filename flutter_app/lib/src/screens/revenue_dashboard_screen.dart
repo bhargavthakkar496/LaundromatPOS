@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../data/pos_repository.dart';
-import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
@@ -11,6 +10,7 @@ import '../models/order_history_item.dart';
 import '../models/pos_user.dart';
 import '../models/refund_request.dart';
 import '../models/revenue.dart';
+import '../services/currency_formatter.dart';
 import '../services/revenue_report_service.dart';
 import '../services/revenue_reporting_service.dart';
 import '../ui/tokens/app_colors.dart';
@@ -203,6 +203,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
           'Machine': _machineTypeFilter,
           'Search': _searchController.text.trim(),
         },
+        locale: Localizations.localeOf(context),
       );
       await Printing.layoutPdf(
         onLayout: (_) async => bytes,
@@ -218,7 +219,10 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
   }
 
   Future<void> _printDayEndCheckout(DayEndCheckout checkout) async {
-    final bytes = await RevenueReportService.buildDayEndCheckoutPdf(checkout);
+    final bytes = await RevenueReportService.buildDayEndCheckoutPdf(
+      checkout,
+      Localizations.localeOf(context),
+    );
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: 'washpos-day-end-${checkout.id}',
@@ -243,7 +247,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Day-end checkout for ${_dateFormat.format(_dayEndDate)} saved with variance INR ${checkout.cashVariance.toStringAsFixed(0)}.',
+            'Day-end checkout for ${_dateFormat.format(_dayEndDate)} saved with variance ${CurrencyFormatter.formatAmountForContext(context, checkout.cashVariance)}.',
           ),
         ),
       );
@@ -274,7 +278,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.revenue),
+        title: const Text('Revenue & Reports'),
         actions: [
           IconButton(
             onPressed: _loading ? null : () => _loadData(showLoading: false),
@@ -292,12 +296,12 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                 _buildFilters(),
                 const SizedBox(height: 20),
                 DashboardSection(
-                  title: 'Revenue Snapshot',
+                  title: 'Executive Snapshot',
                   child: _buildSummaryCards(summary),
                 ),
                 const SizedBox(height: 20),
                 DashboardSection(
-                  title: 'Performance Breakdowns',
+                  title: 'Report Breakdowns',
                   child: _buildBreakdowns(summary),
                 ),
                 const SizedBox(height: 20),
@@ -313,9 +317,9 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
   Widget _buildHero(RevenueSummary summary) {
     return DashboardHeroBanner(
-      title: 'Revenue Command Center',
+      title: 'Reporting Command Center',
       description:
-          'Slice revenue by date, payment method, service, and machine type, then print a clean report or close the day with drawer reconciliation.',
+          'Use this as the one-stop reporting destination for revenue, transactions, service mix, machine mix, refund exposure, and printable day-end closeout.',
       maxContentWidth: 540,
       gradient: const LinearGradient(
         colors: [Color(0xFF0C6E7D), Color(0xFF119AB0)],
@@ -328,7 +332,10 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
       metrics: [
         MetricCard(
           label: 'Net Revenue',
-          value: 'INR ${summary.netRevenue.toStringAsFixed(0)}',
+          value: CurrencyFormatter.formatAmountForContext(
+            context,
+            summary.netRevenue,
+          ),
           accent: AppColors.brandPrimary,
           style: MetricCardStyle.glass,
         ),
@@ -350,11 +357,13 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
   Widget _buildFilters() {
     return DashboardSection(
-      title: 'Revenue Segregation Filters',
+      title: 'Reporting Filters',
       action: OutlinedButton.icon(
         onPressed: _printingReport ? null : _printRevenueReport,
         icon: const Icon(Icons.print_outlined),
-        label: Text(_printingReport ? 'Preparing...' : 'Print Report'),
+        label: Text(
+          _printingReport ? 'Preparing...' : 'Print Executive Report',
+        ),
       ),
       child: SurfaceCard(
         child: Column(
@@ -472,33 +481,50 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
       children: [
         MetricCard(
             label: 'Gross Revenue',
-            value: 'INR ${summary.grossRevenue.toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.grossRevenue,
+            ),
             accent: AppColors.brandPrimary,
             style: MetricCardStyle.tinted),
         MetricCard(
             label: 'Refunded',
-            value: 'INR ${summary.refundedRevenue.toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.refundedRevenue,
+            ),
             accent: const Color(0xFFB42318),
             style: MetricCardStyle.tinted),
         MetricCard(
             label: 'Net Revenue',
-            value: 'INR ${summary.netRevenue.toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.netRevenue,
+            ),
             accent: AppColors.statusSuccess,
             style: MetricCardStyle.tinted),
         MetricCard(
             label: 'Average Ticket',
-            value: 'INR ${summary.averageTicket.toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.averageTicket,
+            ),
             accent: const Color(0xFF7C3AED),
             style: MetricCardStyle.tinted),
         MetricCard(
             label: 'Cash Net',
-            value: 'INR ${summary.cashNet.toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.cashNet,
+            ),
             accent: const Color(0xFFD97706),
             style: MetricCardStyle.tinted),
         MetricCard(
             label: 'Digital Net',
-            value:
-                'INR ${(summary.cardNet + summary.upiNet + summary.otherNet).toStringAsFixed(0)}',
+            value: CurrencyFormatter.formatAmountForContext(
+              context,
+              summary.cardNet + summary.upiNet + summary.otherNet,
+            ),
             accent: const Color(0xFF1D4ED8),
             style: MetricCardStyle.tinted),
       ],
@@ -524,9 +550,9 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
   Widget _buildTransactions(List<OrderHistoryItem> transactions) {
     return DashboardSection(
-      title: 'Report Pullout',
+      title: 'Transaction Audit Trail',
       description:
-          'Filtered transactions are ready for audit review and printable reporting.',
+          'Filtered transactions are ready for audit review, reconciliation, and exported reporting.',
       child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,7 +580,12 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                             Text(item.order.paymentReference),
                             Text(item.order.paymentMethod),
                             Text(item.order.paymentStatus),
-                            Text('INR ${item.order.amount.toStringAsFixed(0)}'),
+                            Text(
+                              CurrencyFormatter.formatAmountForContext(
+                                context,
+                                item.order.amount,
+                              ),
+                            ),
                             Text(_dateTimeFormat.format(item.order.timestamp)),
                           ],
                         ),
@@ -571,7 +602,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
     return DashboardSection(
       title: 'Day-End Checkout',
       description:
-          'Reconcile the drawer, store notes, and lock in a printable closeout snapshot for the selected business day.',
+          'Reconcile the drawer, store notes, and lock in a printable closeout report for the selected business day.',
       action: OutlinedButton.icon(
         onPressed: _pickDayEndDate,
         icon: const Icon(Icons.calendar_today_outlined),
@@ -616,13 +647,19 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
               children: [
                 MetricCard(
                   label: 'Expected Drawer',
-                  value: 'INR ${preview.expectedDrawerCash.toStringAsFixed(0)}',
+                  value: CurrencyFormatter.formatAmountForContext(
+                    context,
+                    preview.expectedDrawerCash,
+                  ),
                   accent: const Color(0xFFD97706),
                   style: MetricCardStyle.tinted,
                 ),
                 MetricCard(
                   label: 'Variance',
-                  value: 'INR ${preview.cashVariance.toStringAsFixed(0)}',
+                  value: CurrencyFormatter.formatAmountForContext(
+                    context,
+                    preview.cashVariance,
+                  ),
                   accent: preview.cashVariance == 0
                       ? AppColors.statusSuccess
                       : const Color(0xFFB42318),
@@ -630,8 +667,10 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                 ),
                 MetricCard(
                   label: 'Pending Refund Exposure',
-                  value:
-                      'INR ${preview.pendingRefundAmount.toStringAsFixed(0)}',
+                  value: CurrencyFormatter.formatAmountForContext(
+                    context,
+                    preview.pendingRefundAmount,
+                  ),
                   accent: const Color(0xFF7C3AED),
                   style: MetricCardStyle.tinted,
                 ),
@@ -655,7 +694,7 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
 
   Widget _buildRecentCheckouts() {
     return DashboardSection(
-      title: 'Recent Day-End Closures',
+      title: 'Recent Closeout Reports',
       child: SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -697,11 +736,11 @@ class _RevenueDashboardScreenState extends State<RevenueDashboardScreen> {
                           runSpacing: 8,
                           children: [
                             Text(
-                                'Net: INR ${checkout.netRevenue.toStringAsFixed(0)}'),
+                                'Net: ${CurrencyFormatter.formatAmountForContext(context, checkout.netRevenue)}'),
                             Text(
-                                'Cash: INR ${checkout.cashNet.toStringAsFixed(0)}'),
+                                'Cash: ${CurrencyFormatter.formatAmountForContext(context, checkout.cashNet)}'),
                             Text(
-                                'Variance: INR ${checkout.cashVariance.toStringAsFixed(0)}'),
+                                'Variance: ${CurrencyFormatter.formatAmountForContext(context, checkout.cashVariance)}'),
                             Text('Closed by: ${checkout.closedByName}'),
                             Text(_dateTimeFormat.format(checkout.closedAt)),
                           ],
@@ -755,7 +794,10 @@ class _BreakdownCard extends StatelessWidget {
                     Text('${item.orderCount} orders'),
                     const SizedBox(width: 12),
                     Text(
-                      'INR ${item.amount.toStringAsFixed(0)}',
+                      CurrencyFormatter.formatAmountForContext(
+                        context,
+                        item.amount,
+                      ),
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ],
@@ -789,7 +831,7 @@ class _CashInput extends StatelessWidget {
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
-          prefixText: 'INR ',
+          prefixText: CurrencyFormatter.currencyPrefixForContext(context),
         ),
       ),
     );

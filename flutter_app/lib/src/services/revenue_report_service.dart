@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/order_history_item.dart';
 import '../models/revenue.dart';
+import 'currency_formatter.dart';
 
 class RevenueReportService {
   static final DateFormat _dateTimeFormat = DateFormat('dd MMM yyyy, hh:mm a');
@@ -17,6 +19,7 @@ class RevenueReportService {
     required DateTime rangeStart,
     required DateTime rangeEnd,
     required Map<String, String> filters,
+    required Locale locale,
   }) async {
     final document = pw.Document();
 
@@ -54,13 +57,13 @@ class RevenueReportService {
                 .toList(),
           ),
           pw.SizedBox(height: 16),
-          _metricGrid(summary),
+          _metricGrid(summary, locale),
           pw.SizedBox(height: 18),
-          _breakdownSection('Payment Breakdown', summary.paymentBreakdown),
-          _breakdownSection('Service Breakdown', summary.serviceBreakdown),
+          _breakdownSection('Payment Breakdown', summary.paymentBreakdown, locale),
+          _breakdownSection('Service Breakdown', summary.serviceBreakdown, locale),
           _breakdownSection(
-              'Machine Type Breakdown', summary.machineTypeBreakdown),
-          _breakdownSection('Top Machines', summary.topMachineBreakdown),
+              'Machine Type Breakdown', summary.machineTypeBreakdown, locale),
+          _breakdownSection('Top Machines', summary.topMachineBreakdown, locale),
           pw.SizedBox(height: 18),
           pw.Text(
             'Transactions',
@@ -87,7 +90,7 @@ class RevenueReportService {
                     item.machine.name,
                     item.order.paymentMethod,
                     item.order.paymentStatus,
-                    'INR ${item.order.amount.toStringAsFixed(0)}',
+                    CurrencyFormatter.formatAmount(item.order.amount, locale),
                   ],
                 )
                 .toList(),
@@ -101,6 +104,7 @@ class RevenueReportService {
 
   static Future<Uint8List> buildDayEndCheckoutPdf(
     DayEndCheckout checkout,
+    Locale locale,
   ) async {
     final document = pw.Document();
     document.addPage(
@@ -125,30 +129,32 @@ class RevenueReportService {
               children: [
                 _row('Transactions', '${checkout.transactionCount}'),
                 _row('Gross revenue',
-                    'INR ${checkout.grossRevenue.toStringAsFixed(0)}'),
+                    CurrencyFormatter.formatAmount(checkout.grossRevenue, locale)),
                 _row('Refunded',
-                    'INR ${checkout.refundedRevenue.toStringAsFixed(0)}'),
+                    CurrencyFormatter.formatAmount(checkout.refundedRevenue, locale)),
                 _row('Net revenue',
-                    'INR ${checkout.netRevenue.toStringAsFixed(0)}'),
-                _row('Cash net', 'INR ${checkout.cashNet.toStringAsFixed(0)}'),
+                    CurrencyFormatter.formatAmount(checkout.netRevenue, locale)),
+                _row('Cash net', CurrencyFormatter.formatAmount(checkout.cashNet, locale)),
                 _row('Digital net',
-                    'INR ${checkout.digitalNet.toStringAsFixed(0)}'),
+                    CurrencyFormatter.formatAmount(checkout.digitalNet, locale)),
                 _row('Opening cash',
-                    'INR ${checkout.openingCash.toStringAsFixed(0)}'),
+                    CurrencyFormatter.formatAmount(checkout.openingCash, locale)),
                 _row(
                   'Expected drawer cash',
-                  'INR ${checkout.expectedDrawerCash.toStringAsFixed(0)}',
+                  CurrencyFormatter.formatAmount(checkout.expectedDrawerCash, locale),
                 ),
                 _row(
                   'Counted drawer cash',
-                  'INR ${checkout.countedDrawerCash.toStringAsFixed(0)}',
+                  CurrencyFormatter.formatAmount(checkout.countedDrawerCash, locale),
                 ),
-                _row('Cash variance',
-                    'INR ${checkout.cashVariance.toStringAsFixed(0)}'),
+                _row(
+                  'Cash variance',
+                  CurrencyFormatter.formatAmount(checkout.cashVariance, locale),
+                ),
                 _row('Pending refunds', '${checkout.pendingRefundCount}'),
                 _row(
                   'Pending refund amount',
-                  'INR ${checkout.pendingRefundAmount.toStringAsFixed(0)}',
+                  CurrencyFormatter.formatAmount(checkout.pendingRefundAmount, locale),
                 ),
               ],
             ),
@@ -169,16 +175,16 @@ class RevenueReportService {
     return document.save();
   }
 
-  static pw.Widget _metricGrid(RevenueSummary summary) {
+  static pw.Widget _metricGrid(RevenueSummary summary, Locale locale) {
     final metrics = [
       ('Transactions', '${summary.transactionCount}'),
-      ('Gross', 'INR ${summary.grossRevenue.toStringAsFixed(0)}'),
-      ('Refunded', 'INR ${summary.refundedRevenue.toStringAsFixed(0)}'),
-      ('Net', 'INR ${summary.netRevenue.toStringAsFixed(0)}'),
-      ('Avg Ticket', 'INR ${summary.averageTicket.toStringAsFixed(0)}'),
-      ('Cash Net', 'INR ${summary.cashNet.toStringAsFixed(0)}'),
-      ('Card Net', 'INR ${summary.cardNet.toStringAsFixed(0)}'),
-      ('UPI Net', 'INR ${summary.upiNet.toStringAsFixed(0)}'),
+      ('Gross', CurrencyFormatter.formatAmount(summary.grossRevenue, locale)),
+      ('Refunded', CurrencyFormatter.formatAmount(summary.refundedRevenue, locale)),
+      ('Net', CurrencyFormatter.formatAmount(summary.netRevenue, locale)),
+      ('Avg Ticket', CurrencyFormatter.formatAmount(summary.averageTicket, locale)),
+      ('Cash Net', CurrencyFormatter.formatAmount(summary.cashNet, locale)),
+      ('Card Net', CurrencyFormatter.formatAmount(summary.cardNet, locale)),
+      ('UPI Net', CurrencyFormatter.formatAmount(summary.upiNet, locale)),
     ];
     return pw.Wrap(
       spacing: 10,
@@ -213,6 +219,7 @@ class RevenueReportService {
   static pw.Widget _breakdownSection(
     String title,
     List<RevenueBreakdownItem> items,
+    Locale locale,
   ) {
     if (items.isEmpty) {
       return pw.SizedBox.shrink();
@@ -234,7 +241,7 @@ class RevenueReportService {
                 (item) => [
                   item.label,
                   '${item.orderCount}',
-                  'INR ${item.amount.toStringAsFixed(0)}',
+                  CurrencyFormatter.formatAmount(item.amount, locale),
                 ],
               )
               .toList(),

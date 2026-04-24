@@ -29,6 +29,7 @@ import '../models/staff.dart';
 import '../services/machine_integration_factory.dart';
 import '../services/machine_integration_service.dart';
 import '../services/revenue_reporting_service.dart';
+import '../services/active_order_session_sync.dart';
 import 'pos_repository.dart';
 
 class DemoPosRepository implements PosRepository {
@@ -434,6 +435,9 @@ class DemoPosRepository implements PosRepository {
   Future<void> initialize() async {
     await _loadPersistedState();
     var shouldPersist = false;
+    if (_migrateLegacyWasher03MaintenanceSeed()) {
+      shouldPersist = true;
+    }
     if (_users.isEmpty) {
       seedDemoData();
       shouldPersist = true;
@@ -517,6 +521,39 @@ class DemoPosRepository implements PosRepository {
     await _machineIntegration.dispose();
   }
 
+  bool _migrateLegacyWasher03MaintenanceSeed() {
+    var changed = false;
+
+    _maintenanceRecords.removeWhere((record) {
+      final isLegacySeed = record.machineId == 3 &&
+          record.issueTitle == 'Door latch inspection' &&
+          record.reportedByName == 'Store Admin';
+      if (isLegacySeed) {
+        changed = true;
+      }
+      return isLegacySeed;
+    });
+
+    final washer03Index = _machines.indexWhere((machine) => machine.id == 3);
+    if (washer03Index != -1) {
+      final washer03 = _machines[washer03Index];
+      final hasActiveMaintenance = _maintenanceRecords.any(
+        (record) =>
+            record.machineId == 3 && record.status != MaintenanceStatus.completed,
+      );
+      if (!hasActiveMaintenance &&
+          washer03.status == MachineStatus.maintenance &&
+          washer03.currentOrderId == null) {
+        _machines[washer03Index] = washer03.copyWith(
+          status: MachineStatus.available,
+        );
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
   void seedDemoData() {
     if (_users.isEmpty) {
       _users.add(
@@ -554,7 +591,7 @@ class DemoPosRepository implements PosRepository {
           type: 'Washer',
           capacityKg: 12,
           price: 180,
-          status: MachineStatus.maintenance,
+          status: MachineStatus.available,
         ),
         Machine(
           id: 4,
@@ -1131,7 +1168,8 @@ class DemoPosRepository implements PosRepository {
   Future<ActiveOrderSession?> getActiveOrderSession() async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     await _loadPersistedState();
-    final raw = await _preferences.getString(_activeOrderSessionKey);
+    final raw = await readActiveOrderSessionRaw() ??
+        await _preferences.getString(_activeOrderSessionKey);
     if (raw == null || raw.isEmpty) {
       return null;
     }
@@ -1166,10 +1204,9 @@ class DemoPosRepository implements PosRepository {
       createdAt: DateTime.now(),
       garmentItems: garmentItems,
     );
-    await _preferences.setString(
-      _activeOrderSessionKey,
-      jsonEncode(session.toJson()),
-    );
+    final raw = jsonEncode(session.toJson());
+    await _preferences.setString(_activeOrderSessionKey, raw);
+    await writeActiveOrderSessionRaw(raw);
     return session;
   }
 
@@ -1218,10 +1255,9 @@ class DemoPosRepository implements PosRepository {
       orderId: order.id,
       createdAt: order.timestamp,
     );
-    await _preferences.setString(
-      _activeOrderSessionKey,
-      jsonEncode(bookedSession.toJson()),
-    );
+    final raw = jsonEncode(bookedSession.toJson());
+    await _preferences.setString(_activeOrderSessionKey, raw);
+    await writeActiveOrderSessionRaw(raw);
     return bookedSession;
   }
 
@@ -1274,15 +1310,15 @@ class DemoPosRepository implements PosRepository {
       stage: ActiveOrderSessionStage.paid,
       paymentReference: paymentReference,
     );
-    await _preferences.setString(
-      _activeOrderSessionKey,
-      jsonEncode(paidSession.toJson()),
-    );
+    final raw = jsonEncode(paidSession.toJson());
+    await _preferences.setString(_activeOrderSessionKey, raw);
+    await writeActiveOrderSessionRaw(raw);
     return paidSession;
   }
 
   Future<void> clearActiveOrderSession() async {
     await _preferences.remove(_activeOrderSessionKey);
+    await clearActiveOrderSessionRaw();
   }
 
   Future<CustomerProfile?> getCustomerProfileByPhone(String phone) async {

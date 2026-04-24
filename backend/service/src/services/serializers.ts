@@ -283,6 +283,102 @@ export function serializeMaintenanceRecord(row: {
   };
 }
 
+export function serializeStaffMember(row: {
+  id: number;
+  full_name: string;
+  role: string;
+  phone: string;
+  hourly_rate: number | string;
+  is_active: boolean;
+}) {
+  return {
+    id: Number(row.id),
+    fullName: row.full_name,
+    role: row.role,
+    phone: row.phone,
+    hourlyRate: Number(row.hourly_rate),
+    isActive: row.is_active,
+  };
+}
+
+export function serializeStaffShift(row: {
+  id: number;
+  staff_id: number;
+  shift_date: Date | string;
+  start_time_label: string;
+  end_time_label: string;
+  branch: string;
+  assignment: string;
+  hours: number | string;
+}) {
+  return {
+    id: Number(row.id),
+    staffId: Number(row.staff_id),
+    shiftDate: new Date(row.shift_date).toISOString(),
+    startTimeLabel: row.start_time_label,
+    endTimeLabel: row.end_time_label,
+    branch: row.branch,
+    assignment: row.assignment,
+    hours: Number(row.hours),
+  };
+}
+
+export function serializeStaffLeaveRequest(row: {
+  id: number;
+  staff_id: number;
+  staff_name: string;
+  leave_type: string;
+  start_date: Date | string;
+  end_date: Date | string;
+  status: string;
+  reason: string;
+  requested_at: Date | string;
+  reviewed_by_name: string | null;
+}) {
+  return {
+    id: Number(row.id),
+    staffId: Number(row.staff_id),
+    staffName: row.staff_name,
+    leaveType: row.leave_type,
+    startDate: new Date(row.start_date).toISOString(),
+    endDate: new Date(row.end_date).toISOString(),
+    status: row.status,
+    reason: row.reason,
+    requestedAt: new Date(row.requested_at).toISOString(),
+    reviewedByName: row.reviewed_by_name,
+  };
+}
+
+export function serializeStaffPayout(row: {
+  id: number;
+  staff_id: number;
+  staff_name: string;
+  period_label: string;
+  hours_worked: number | string;
+  gross_amount: number | string;
+  bonus_amount: number | string;
+  deductions_amount: number | string;
+  net_amount: number | string;
+  status: string;
+  created_at: Date | string;
+  paid_at: Date | string | null;
+}) {
+  return {
+    id: Number(row.id),
+    staffId: Number(row.staff_id),
+    staffName: row.staff_name,
+    periodLabel: row.period_label,
+    hoursWorked: Number(row.hours_worked),
+    grossAmount: Number(row.gross_amount),
+    bonusAmount: Number(row.bonus_amount),
+    deductionsAmount: Number(row.deductions_amount),
+    netAmount: Number(row.net_amount),
+    status: row.status,
+    createdAt: new Date(row.created_at).toISOString(),
+    paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : null,
+  };
+}
+
 export function serializePaymentSession(row: {
   id: number;
   amount: number | string;

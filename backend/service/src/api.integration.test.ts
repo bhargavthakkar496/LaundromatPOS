@@ -155,6 +155,108 @@ test("backend api integration flows", { concurrency: false }, async (t) => {
     );
   });
 
+  await t.test('staff management data is served and updated from backend storage', async () => {
+    const membersResponse = await apiRequest<
+      Array<{ id: number; fullName: string; role: string }>
+    >('/staff/members');
+    const members = assertOk(membersResponse);
+    assert.ok(members.length >= 4);
+    const cashier = members.find((item) => item.fullName === 'Kiran Patel');
+    assert.ok(cashier);
+
+    const shiftsResponse = await apiRequest<
+      Array<{ id: number; staffId: number; assignment: string }>
+    >(
+      `/staff/shifts?start=${encodeURIComponent(new Date('2026-01-01T00:00:00.000Z').toISOString())}&end=${encodeURIComponent(new Date('2030-01-01T00:00:00.000Z').toISOString())}`,
+    );
+    const shifts = assertOk(shiftsResponse);
+    assert.ok(shifts.length >= 1);
+
+    const createdShiftResponse = await apiRequest<{
+      id: number;
+      staffId: number;
+      branch: string;
+      assignment: string;
+    }>('/staff/shifts', {
+      method: 'POST',
+      body: {
+        staffId: cashier!.id,
+        shiftDate: new Date().toISOString(),
+        startTimeLabel: '11:00',
+        endTimeLabel: '19:00',
+        branch: 'Main Branch',
+        assignment: 'Counter close support',
+        hours: 8,
+      },
+    });
+    const createdShift = assertOk(createdShiftResponse, 201);
+    assert.equal(createdShift.staffId, cashier!.id);
+    assert.equal(createdShift.assignment, 'Counter close support');
+
+    const leaveResponse = await apiRequest<
+      Array<{ id: number; status: string; reviewedByName: string | null }>
+    >('/staff/leave-requests');
+    const leaveRequests = assertOk(leaveResponse);
+    assert.ok(leaveRequests.length >= 1);
+    const pendingLeave = leaveRequests.find((item) => item.status === 'PENDING');
+    assert.ok(pendingLeave);
+
+    const updatedLeaveResponse = await apiRequest<{
+      id: number;
+      status: string;
+      reviewedByName: string | null;
+    }>(`/staff/leave-requests/${pendingLeave!.id}`, {
+      method: 'PATCH',
+      body: {
+        status: 'APPROVED',
+        reviewedByName: 'Integration Manager',
+      },
+    });
+    const updatedLeave = assertOk(updatedLeaveResponse);
+    assert.equal(updatedLeave.status, 'APPROVED');
+    assert.equal(updatedLeave.reviewedByName, 'Integration Manager');
+
+    const payoutsResponse = await apiRequest<
+      Array<{ id: number; status: string }>
+    >('/staff/payouts');
+    const payouts = assertOk(payoutsResponse);
+    assert.ok(payouts.length >= 1);
+
+    const createdPayoutResponse = await apiRequest<{
+      id: number;
+      staffId: number;
+      status: string;
+      grossAmount: number;
+      netAmount: number;
+    }>('/staff/payouts', {
+      method: 'POST',
+      body: {
+        staffId: cashier!.id,
+        periodLabel: '16 Apr - 30 Apr',
+        hoursWorked: 10,
+        bonusAmount: 25,
+        deductionsAmount: 5,
+      },
+    });
+    const createdPayout = assertOk(createdPayoutResponse, 201);
+    assert.equal(createdPayout.staffId, cashier!.id);
+    assert.equal(createdPayout.status, 'SCHEDULED');
+    assert.equal(createdPayout.grossAmount, 1200);
+    assert.equal(createdPayout.netAmount, 1220);
+
+    const paidPayoutResponse = await apiRequest<{
+      id: number;
+      status: string;
+      paidAt: string | null;
+    }>(`/staff/payouts/${createdPayout.id}/pay`, {
+      method: 'POST',
+      body: {},
+    });
+    const paidPayout = assertOk(paidPayoutResponse);
+    assert.equal(paidPayout.status, 'PAID');
+    assert.ok(paidPayout.paidAt);
+  });
+
   await t.test(
     'maintenance flow moves a device from marked to ongoing to completed and restores availability',
     async () => {

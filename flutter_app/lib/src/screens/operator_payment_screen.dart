@@ -10,6 +10,7 @@ import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
 import '../models/pos_user.dart';
 import '../models/refund_request.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/payment_status_sheet.dart';
 
 class OperatorPaymentScreen extends StatefulWidget {
@@ -366,17 +367,26 @@ class _OperatorPaymentScreenState extends State<OperatorPaymentScreen> {
                             _ReportMetricCard(
                               label: 'Gross',
                               value:
-                                  'INR ${grossCollection.toStringAsFixed(0)}',
+                                  CurrencyFormatter.formatAmountForContext(
+                                    context,
+                                    grossCollection,
+                                  ),
                               tone: const Color(0xFF2A9D8F),
                             ),
                             _ReportMetricCard(
                               label: 'Refunded',
-                              value: 'INR ${refundedTotal.toStringAsFixed(0)}',
+                              value: CurrencyFormatter.formatAmountForContext(
+                                context,
+                                refundedTotal,
+                              ),
                               tone: const Color(0xFFB42318),
                             ),
                             _ReportMetricCard(
                               label: 'Net',
-                              value: 'INR ${netCollection.toStringAsFixed(0)}',
+                              value: CurrencyFormatter.formatAmountForContext(
+                                context,
+                                netCollection,
+                              ),
                               tone: const Color(0xFF7C3AED),
                             ),
                           ],
@@ -535,7 +545,10 @@ class _OperatorPaymentScreenState extends State<OperatorPaymentScreen> {
                 _DetailPill(label: 'Phone', value: session.customerPhone),
                 _DetailPill(
                   label: 'Amount',
-                  value: 'INR ${amount.toStringAsFixed(0)}',
+                  value: CurrencyFormatter.formatAmountForContext(
+                    context,
+                    amount,
+                  ),
                 ),
                 _DetailPill(label: 'Payment', value: session.paymentMethod),
                 _DetailPill(
@@ -634,7 +647,9 @@ class _MethodChip extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text('$label: INR ${total.toStringAsFixed(0)}'),
+      child: Text(
+        '$label: ${CurrencyFormatter.formatAmountForContext(context, total)}',
+      ),
     );
   }
 }
@@ -726,7 +741,9 @@ class _PaymentHistoryCard extends StatelessWidget {
                 Text('Phone: ${item.customer.phone}'),
                 Text('Reference: ${item.order.paymentReference}'),
                 Text('Method: ${item.order.paymentMethod}'),
-                Text('Amount: INR ${item.order.amount.toStringAsFixed(0)}'),
+                Text(
+                  'Amount: ${CurrencyFormatter.formatAmountForContext(context, item.order.amount)}',
+                ),
                 Text(formattedDate),
               ],
             ),

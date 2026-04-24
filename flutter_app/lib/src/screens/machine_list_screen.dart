@@ -463,20 +463,16 @@ class _MachineListScreenState extends State<MachineListScreen> {
       return;
     }
 
-    if (action.title == 'Orders' || action.title == 'Reports') {
-      if (action.title == 'Orders') {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => OrderManagementScreen(
-              repository: widget.repository,
-              user: widget.user,
-            ),
+    if (action.title == 'Orders') {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => OrderManagementScreen(
+            repository: widget.repository,
+            user: widget.user,
           ),
-        );
-        _loadMachines(showLoading: false);
-        return;
-      }
-      await _openHistory();
+        ),
+      );
+      _loadMachines(showLoading: false);
       return;
     }
 
@@ -493,7 +489,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
       return;
     }
 
-    if (action.title == 'Revenue & Day End') {
+    if (action.title == 'Revenue & Reports') {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => RevenueDashboardScreen(
@@ -596,22 +592,16 @@ class _MachineListScreenState extends State<MachineListScreen> {
         iconType: ManagerOptionIconType.pickup,
       ),
       _ManagerAction(
-        title: 'Reports',
-        shortTitle: 'Reports',
-        description:
-            'Open manager reports for cycle trends and order summaries.',
-        iconType: ManagerOptionIconType.reports,
-      ),
-      _ManagerAction(
         title: 'Maintenance',
         shortTitle: 'Maintenance',
         description: 'Track machine service tasks and downtime handling.',
         iconType: ManagerOptionIconType.maintenance,
       ),
       _ManagerAction(
-        title: 'Revenue & Day End',
-        shortTitle: 'Revenue',
-        description: 'Review revenue totals and prepare day-end checkout.',
+        title: 'Revenue & Reports',
+        shortTitle: 'Reports',
+        description:
+            'Open the central reporting hub for revenue, transactions, payment mix, machine mix, refunds, and day-end closeout.',
         iconType: ManagerOptionIconType.revenue,
       ),
       _ManagerAction(

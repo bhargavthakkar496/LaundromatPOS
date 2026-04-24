@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/inventory.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/inventory_category_icon.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -325,7 +326,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                   _InventoryMetricCard(
                     label: l10n.stockValue,
-                    value: 'INR ${metrics.stockValue.toStringAsFixed(0)}',
+                    value: CurrencyFormatter.formatAmountForContext(
+                      context,
+                      metrics.stockValue,
+                    ),
                     accent: const Color(0xFF2C9A65),
                   ),
                   _InventoryMetricCard(
@@ -808,7 +812,10 @@ class _InventoryItemCard extends StatelessWidget {
                 ),
                 _ItemMeta(
                   label: l10n.stockValue,
-                  value: 'INR ${item.stockValue.toStringAsFixed(0)}',
+                  value: CurrencyFormatter.formatAmountForContext(
+                    context,
+                    item.stockValue,
+                  ),
                 ),
                 _ItemMeta(
                   label: l10n.supplier,
@@ -857,7 +864,10 @@ class _InventoryItemCard extends StatelessWidget {
                   label: l10n.sellingPrice,
                   value: item.sellingPrice == null
                       ? l10n.notApplicable
-                      : 'INR ${item.sellingPrice!.toStringAsFixed(0)}',
+                      : CurrencyFormatter.formatAmountForContext(
+                          context,
+                          item.sellingPrice!,
+                        ),
                 ),
                 _ItemMeta(
                   label: l10n.recordStatus,

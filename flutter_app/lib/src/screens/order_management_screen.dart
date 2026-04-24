@@ -7,12 +7,14 @@ import 'package:intl/intl.dart';
 import '../data/pos_repository.dart';
 import '../localization/app_localizations.dart';
 import '../models/active_order_session.dart';
+import '../models/customer.dart';
 import '../models/garment_item.dart';
 import '../models/machine.dart';
 import '../models/order.dart';
 import '../models/order_history_item.dart';
 import '../models/pos_user.dart';
 import '../models/receipt_data.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
 import '../widgets/receipt_actions.dart';
@@ -49,15 +51,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     OrderStatus.readyForPickup,
     OrderStatus.delivered,
   ];
-  static const _workflowActions = [
-    'Receive garments and capture customer name, mobile number, and service requirements.',
-    'Build a per-piece garment manifest with wash type, dry duration, ironing, and quantity.',
-    'Calculate invoice total and generate the order id for the customer.',
-    'Print one taffeta tag per garment piece with text details and QR-ready tag data.',
-    'Scan tags during washing, drying, and ironing to update piece-level progress.',
-    'Reconcile all tagged garments before marking the order ready for pickup or delivery.',
-  ];
-
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
   final _customerPhoneController = TextEditingController();
@@ -84,6 +77,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   final List<_ScannedLaundryTag> _scannedTags = [];
   final List<GarmentItem> _garmentItems = [];
   ActiveOrderSession? _activeSession;
+  ReceiptData? _receiptData;
+  bool _receiptLoading = false;
+  String? _receiptStatusMessage;
+  String? _receiptSessionKey;
   Timer? _sessionTimer;
 
   bool get _includesWashing =>
@@ -187,6 +184,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       _selectedIroningStation =
           _selectionFromList(_ironingStations, _selectedIroningStation);
     });
+    _refreshReceiptDetails(_activeSession, force: _receiptData == null);
   }
 
   void _refreshHistory() {
@@ -206,6 +204,73 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     setState(() {
       _activeSession = session;
     });
+    _refreshReceiptDetails(session);
+  }
+
+  String _receiptKey(ActiveOrderSession session) {
+    return [
+      session.stage,
+      '${session.orderId}',
+      '${session.washerMachineId}',
+      '${session.dryerMachineId}',
+      '${session.ironingMachineId}',
+      session.paymentReference ?? '',
+      session.createdAt.toIso8601String(),
+    ].join('|');
+  }
+
+  Future<void> _refreshReceiptDetails(
+    ActiveOrderSession? session, {
+    bool force = false,
+  }) async {
+    if (session == null || !session.isPaid) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _receiptData = null;
+        _receiptLoading = false;
+        _receiptStatusMessage = null;
+        _receiptSessionKey = null;
+      });
+      return;
+    }
+
+    final key = _receiptKey(session);
+    if (!force && _receiptSessionKey == key && (_receiptLoading || _receiptData != null)) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _receiptSessionKey = key;
+        _receiptLoading = true;
+        _receiptStatusMessage = null;
+      });
+    }
+
+    try {
+      final receipt = await _loadReceiptData(session);
+      if (!mounted || _receiptSessionKey != key) {
+        return;
+      }
+      setState(() {
+        _receiptData = receipt;
+        _receiptLoading = false;
+        _receiptStatusMessage = receipt == null
+            ? 'Receipt details are syncing. Receipt actions will appear as soon as the order history record is available.'
+            : null;
+      });
+    } catch (_) {
+      if (!mounted || _receiptSessionKey != key) {
+        return;
+      }
+      setState(() {
+        _receiptLoading = false;
+        _receiptStatusMessage =
+            'Receipt details could not be loaded right now. You can retry or start a new order.';
+      });
+    }
   }
 
   bool _sessionEquals(ActiveOrderSession? left, ActiveOrderSession? right) {
@@ -271,6 +336,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       _saving = false;
       _activeSession = session;
     });
+    _refreshReceiptDetails(session, force: true);
 
     _showFormMessage(
       'Order details are now visible on both operator and customer screens.',
@@ -709,6 +775,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.all(18),
+                  constraints: BoxConstraints(minHeight: compact ? 0 : 132),
                   decoration: BoxDecoration(
                     color: selected
                         ? color.withValues(alpha: 0.1)
@@ -758,9 +825,17 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        _serviceDescription(service),
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      SizedBox(
+                        height: compact ? null : 48,
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Text(
+                            _serviceDescription(service),
+                            maxLines: compact ? null : 2,
+                            overflow: compact ? null : TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1043,11 +1118,11 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                               ),
                             ),
                             Text(
-                              'Unit: INR ${item.unitPrice.toStringAsFixed(0)}',
+                              'Unit: ${CurrencyFormatter.formatAmountForContext(context, item.unitPrice)}',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             Text(
-                              'Line total: INR ${item.lineTotal.toStringAsFixed(0)}',
+                              'Line total: ${CurrencyFormatter.formatAmountForContext(context, item.lineTotal)}',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
@@ -1063,7 +1138,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                               .map(
                                 (service) => FilterChip(
                                   label: Text(
-                                    '$service (INR ${_serviceRate(service).toStringAsFixed(0)})',
+                                    '$service (${CurrencyFormatter.formatAmountForContext(context, _serviceRate(service))})',
                                   ),
                                   selected:
                                       item.selectedServices.contains(service),
@@ -1100,7 +1175,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                   Text('Rows: ${_garmentItems.length}'),
                   Text('Pieces: $_garmentPieceCount'),
                   Text(
-                    'Manifest total: INR ${_garmentManifestTotal.toStringAsFixed(0)}',
+                    'Manifest total: ${CurrencyFormatter.formatAmountForContext(context, _garmentManifestTotal)}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -1243,7 +1318,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${_garmentItems.length} rows • $_garmentPieceCount pieces • INR ${_garmentManifestTotal.toStringAsFixed(0)}',
+              '${_garmentItems.length} rows • $_garmentPieceCount pieces • ${CurrencyFormatter.formatAmountForContext(context, _garmentManifestTotal)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -1291,7 +1366,10 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           const SizedBox(height: 4),
           Text(
             estimatedAmount > 0
-                ? 'INR ${estimatedAmount.toStringAsFixed(0)}'
+                ? CurrencyFormatter.formatAmountForContext(
+                    context,
+                    estimatedAmount,
+                  )
                 : 'Select services to calculate total',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: Colors.white,
@@ -1325,6 +1403,43 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
       _activeSession = session;
       _selectedView = 'Book Order';
     });
+    _refreshReceiptDetails(session, force: true);
+  }
+
+  Future<void> _startNewOrder() async {
+    await widget.repository.clearActiveOrderSession();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeSession = null;
+      _receiptData = null;
+      _receiptLoading = false;
+      _receiptStatusMessage = null;
+      _receiptSessionKey = null;
+      _customerNameController.clear();
+      _customerPhoneController.clear();
+      _barcodeController.clear();
+      _selectedServices
+        ..clear()
+        ..addAll({
+          LaundryService.washing,
+          LaundryService.drying,
+        });
+      _washOption = _washOptions.first;
+      _paymentMethod = _paymentMethods.first;
+      _loadSizeKg = _loadSizes.first;
+      _scannedTags.clear();
+      _garmentItems.clear();
+    });
+
+    await _loadMachines();
+
+    if (!mounted) {
+      return;
+    }
+    _showFormMessage('Started a fresh order session.');
   }
 
   String _statusLabel(String status) {
@@ -1415,18 +1530,58 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
   }
 
   Future<ReceiptData?> _loadReceiptData(ActiveOrderSession session) async {
-    final orderId = session.orderId;
-    if (orderId == null) {
+    try {
+      final orderId = session.orderId;
+      if (orderId != null) {
+        final item = await widget.repository.getOrderHistoryItemByOrderId(orderId);
+        if (item != null) {
+          return ReceiptData(
+            order: item.order,
+            customer: item.customer,
+            machine: item.machine,
+          );
+        }
+      }
+    } catch (_) {
+      // Fall back to session details so receipt actions remain available.
+    }
+
+    final primaryMachine = _findMachineById(
+      session.washerMachineId ??
+          session.dryerMachineId ??
+          session.ironingMachineId,
+    );
+    if (primaryMachine == null || session.orderId == null) {
       return null;
     }
-    final item = await widget.repository.getOrderHistoryItemByOrderId(orderId);
-    if (item == null) {
-      return null;
-    }
+
     return ReceiptData(
-      order: item.order,
-      customer: item.customer,
-      machine: item.machine,
+      order: Order(
+        id: session.orderId!,
+        machineId: primaryMachine.id,
+        customerId: 0,
+        createdByUserId: widget.user.id,
+        serviceType: session.selectedServices.join('+').toUpperCase(),
+        selectedServices: session.selectedServices,
+        amount: _estimatedAmount,
+        status: OrderStatus.inProgress,
+        paymentMethod: session.paymentMethod,
+        paymentStatus: PaymentStatus.paid,
+        paymentReference: session.paymentReference ?? 'PENDING',
+        timestamp: session.createdAt,
+        loadSizeKg: session.loadSizeKg,
+        washOption: session.washOption,
+        dryerMachineId: session.dryerMachineId,
+        ironingMachineId: session.ironingMachineId,
+        garmentItems: session.garmentItems,
+      ),
+      customer: Customer(
+        id: 0,
+        fullName: session.customerName,
+        phone: session.customerPhone,
+        preferredWasherSizeKg: session.loadSizeKg,
+      ),
+      machine: primaryMachine,
     );
   }
 
@@ -1475,8 +1630,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
           _buildActiveSessionCard(session),
           const SizedBox(height: 16),
         ],
-        _buildWorkflowActionCard(),
-        const SizedBox(height: 16),
         Form(
           key: _formKey,
           child: Card(
@@ -1595,6 +1748,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<Machine>(
+                          key: ValueKey(_selectedWasher?.id ?? 'washer-empty'),
                           initialValue: _selectedWasher,
                           decoration: const InputDecoration(
                             labelText: 'Assign washer',
@@ -1604,7 +1758,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 (machine) => DropdownMenuItem<Machine>(
                                   value: machine,
                                   child: Text(
-                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                    '${machine.name} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
                                   ),
                                 ),
                               )
@@ -1627,6 +1781,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       service: LaundryService.drying,
                       children: [
                         DropdownButtonFormField<Machine>(
+                          key: ValueKey(_selectedDryer?.id ?? 'dryer-empty'),
                           initialValue: _selectedDryer,
                           decoration: const InputDecoration(
                             labelText: 'Assign dryer',
@@ -1636,7 +1791,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 (machine) => DropdownMenuItem<Machine>(
                                   value: machine,
                                   child: Text(
-                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                    '${machine.name} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
                                   ),
                                 ),
                               )
@@ -1659,6 +1814,9 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                       service: LaundryService.ironing,
                       children: [
                         DropdownButtonFormField<Machine>(
+                          key: ValueKey(
+                            _selectedIroningStation?.id ?? 'ironing-empty',
+                          ),
                           initialValue: _selectedIroningStation,
                           decoration: const InputDecoration(
                             labelText: 'Assign ironing station',
@@ -1668,7 +1826,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                 (machine) => DropdownMenuItem<Machine>(
                                   value: machine,
                                   child: Text(
-                                    '${machine.name} • ${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}',
+                                    '${machine.name} • ${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}',
                                   ),
                                 ),
                               )
@@ -1816,47 +1974,55 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                 'Booking is confirmed. Payment can now be initiated from the customer screen only.',
               )
             else
-              Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Payment is complete. This confirmation is visible on both the operator and customer screens.',
-                      ),
-                      const SizedBox(height: 16),
-                      FutureBuilder<ReceiptData?>(
-                        future: _loadReceiptData(session),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState !=
-                              ConnectionState.done) {
-                            return const Padding(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Card(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Payment is complete. This confirmation is visible on both the operator and customer screens.',
+                          ),
+                          const SizedBox(height: 16),
+                          if (_receiptLoading)
+                            const Padding(
                               padding: EdgeInsets.symmetric(vertical: 8),
                               child: LinearProgressIndicator(),
-                            );
-                          }
-
-                          if (snapshot.hasError) {
-                            return const Text(
-                              'Receipt details could not be loaded.',
-                            );
-                          }
-
-                          final receipt = snapshot.data;
-                          if (receipt == null) {
-                            return const Text(
-                              'Receipt details are not available yet.',
-                            );
-                          }
-
-                          return ReceiptActions(receipt: receipt);
-                        },
+                            )
+                          else if (_receiptData != null)
+                            ReceiptActions(receipt: _receiptData!)
+                          else
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _receiptStatusMessage ??
+                                      'Receipt details are syncing.',
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _refreshReceiptDetails(session, force: true),
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry Receipt Details'),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _startNewOrder,
+                    icon: const Icon(Icons.add_task_outlined),
+                    label: const Text('Start New Order'),
+                  ),
+                ],
               ),
           ],
         ),
@@ -2062,55 +2228,6 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
     );
   }
 
-  Widget _buildWorkflowActionCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recommended Order Flow Actions',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'This checklist follows the laundromat intake-to-delivery process and is now the basis for the piece-level order implementation.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            ...List.generate(_workflowActions.length, (index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text('${index + 1}'),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_workflowActions[index])),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ScannedLaundryTag {

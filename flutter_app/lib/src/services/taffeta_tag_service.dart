@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:barcode/barcode.dart' as barcode_lib;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -32,6 +33,12 @@ class TaffetaTagService {
   static const double _mmToPdfPoints = 72 / 25.4;
   static const double _tagWidthPoints = _tagWidthMm * _mmToPdfPoints;
   static const double _tagHeightPoints = _tagHeightMm * _mmToPdfPoints;
+  static const double _qrSizePoints = 64;
+  static final barcode_lib.Barcode _qrBarcode = barcode_lib.Barcode.qrCode();
+  static const PdfPageFormat pdfPageFormat = PdfPageFormat(
+    _tagWidthPoints,
+    _tagHeightPoints,
+  );
 
   static List<TaffetaTagPrintJob> buildPrintJobs(ReceiptData receipt) {
     final garmentItems = receipt.order.garmentItems;
@@ -120,10 +127,7 @@ class TaffetaTagService {
     for (final job in jobs) {
       document.addPage(
         pw.Page(
-          pageFormat: const PdfPageFormat(
-            _tagWidthPoints,
-            _tagHeightPoints,
-          ),
+          pageFormat: pdfPageFormat,
           margin: const pw.EdgeInsets.all(6),
           build: (context) {
             return pw.Container(
@@ -132,32 +136,39 @@ class TaffetaTagService {
                 border: pw.Border.all(color: PdfColors.black, width: 1),
               ),
               child: pw.Column(
-                mainAxisAlignment: pw.MainAxisAlignment.center,
+                mainAxisAlignment: pw.MainAxisAlignment.start,
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
+                mainAxisSize: pw.MainAxisSize.min,
                 children: [
                   pw.Text(
                     receipt.customer.fullName,
                     textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
-                      fontSize: 8,
+                      fontSize: 7,
                       fontWeight: pw.FontWeight.bold,
                     ),
                     maxLines: 1,
                   ),
-                  pw.SizedBox(height: 2),
+                  pw.SizedBox(height: 1),
                   pw.Text(
                     receipt.customer.phone,
                     textAlign: pw.TextAlign.center,
-                    style: const pw.TextStyle(fontSize: 7),
+                    style: const pw.TextStyle(fontSize: 6),
                     maxLines: 1,
                   ),
-                  pw.SizedBox(height: 4),
+                  pw.SizedBox(height: 1),
                   pw.Center(
-                    child: pw.BarcodeWidget(
-                      barcode: pw.Barcode.qrCode(),
-                      data: job.qrPayload,
-                      width: 72,
-                      height: 72,
+                    child: pw.SizedBox(
+                      width: _qrSizePoints,
+                      height: _qrSizePoints,
+                      child: pw.SvgImage(
+                        svg: _qrBarcode.toSvg(
+                          job.qrPayload,
+                          width: _qrSizePoints,
+                          height: _qrSizePoints,
+                          drawText: false,
+                        ),
+                      ),
                     ),
                   ),
                 ],

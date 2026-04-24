@@ -10,6 +10,7 @@ import '../models/customer_profile.dart';
 import '../models/machine.dart';
 import '../models/order_history_item.dart';
 import '../models/payment_session.dart';
+import '../services/currency_formatter.dart';
 import '../widgets/customer_details_form.dart';
 import '../widgets/machine_icon.dart';
 import '../widgets/payment_status_sheet.dart';
@@ -604,7 +605,7 @@ class _MachineAssignmentTile extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 Text(
-                    '${machine.capacityKg}kg • INR ${machine.price.toStringAsFixed(0)}'),
+                    '${machine.capacityKg}kg • ${CurrencyFormatter.formatAmountForContext(context, machine.price)}'),
               ],
             ),
           ),
@@ -753,7 +754,10 @@ class _RepeatCustomerProfileView extends StatelessWidget {
                   ),
                   _RepeatStatPill(
                     label: 'Spent',
-                    value: 'INR ${profile.totalSpent.toStringAsFixed(0)}',
+                    value: CurrencyFormatter.formatAmountForContext(
+                      context,
+                      profile.totalSpent,
+                    ),
                   ),
                   _RepeatStatPill(
                     label: 'Preferred load',
@@ -812,7 +816,7 @@ class _RepeatCustomerProfileView extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            '${item.machine.name} • INR ${item.order.amount.toStringAsFixed(0)}',
+                            '${item.machine.name} • ${CurrencyFormatter.formatAmountForContext(context, item.order.amount)}',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),

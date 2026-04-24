@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -16,6 +17,8 @@ class BackendApiException implements Exception {
 }
 
 class BackendApiClient {
+  static const Duration _requestTimeout = Duration(seconds: 12);
+
   BackendApiClient({
     required this.baseUrl,
     required this.sessionStore,
@@ -120,25 +123,39 @@ class BackendApiClient {
     }
 
     late final http.Response response;
-    switch (method) {
-      case 'GET':
-        response = await _httpClient.get(uri, headers: headers);
-      case 'POST':
-        response = await _httpClient.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? const <String, Object?>{}),
-        );
-      case 'PATCH':
-        response = await _httpClient.patch(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? const <String, Object?>{}),
-        );
-      case 'DELETE':
-        response = await _httpClient.delete(uri, headers: headers);
-      default:
-        throw BackendApiException('Unsupported HTTP method: $method');
+    try {
+      switch (method) {
+        case 'GET':
+          response = await _httpClient
+              .get(uri, headers: headers)
+              .timeout(_requestTimeout);
+        case 'POST':
+          response = await _httpClient
+              .post(
+                uri,
+                headers: headers,
+                body: jsonEncode(body ?? const <String, Object?>{}),
+              )
+              .timeout(_requestTimeout);
+        case 'PATCH':
+          response = await _httpClient
+              .patch(
+                uri,
+                headers: headers,
+                body: jsonEncode(body ?? const <String, Object?>{}),
+              )
+              .timeout(_requestTimeout);
+        case 'DELETE':
+          response = await _httpClient
+              .delete(uri, headers: headers)
+              .timeout(_requestTimeout);
+        default:
+          throw BackendApiException('Unsupported HTTP method: $method');
+      }
+    } on TimeoutException {
+      throw BackendApiException(
+        'Request timed out while contacting $uri',
+      );
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

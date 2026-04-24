@@ -11,6 +11,7 @@ import { registerPaymentRoutes } from "./payments.routes.js";
 import { registerPricingRoutes } from "./pricing.routes.js";
 import { registerRefundRequestRoutes } from "./refund_requests.routes.js";
 import { registerReservationRoutes } from "./reservations.routes.js";
+import { registerStaffRoutes } from "./staff.routes.js";
 
 export function buildApiRouter() {
   const router = Router();
@@ -25,5 +26,6 @@ export function buildApiRouter() {
   registerRefundRequestRoutes(router);
   registerReservationRoutes(router);
   registerActiveOrderSessionRoutes(router);
+  registerStaffRoutes(router);
   return router;
 }
